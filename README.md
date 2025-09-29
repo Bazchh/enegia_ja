@@ -53,3 +53,6 @@ _(Passos futuros)_
 
 Este projeto é distribuído sob a licença MIT.  
 Sinta-se livre para usar, modificar e compartilhar.
+
+
+## APK LINK: https://drive.google.com/file/d/1yZtjA5qsZMKBPYO4nP1RZCt0RxeEANx9/view?usp=sharing
