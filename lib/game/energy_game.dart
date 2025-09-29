@@ -51,19 +51,17 @@ class EnergyGame extends FlameGame {
   Future<void> onLoad() async {
     await _loadProgress();
 
-    await images.loadAll([
-      'images/icons/icon_solar.png',
-      'images/icons/icon_wind.png',
-      'images/icons/icon_efficiency.png',
-      'images/icons/icon_sanitation.png',
-    ]);
+    const iconPaths = {
+      Building.solar: 'icons/icon_solar.png',
+      Building.eolica: 'icons/icon_wind.png',
+      Building.eficiencia: 'icons/icon_efficiency.png',
+      Building.saneamento: 'icons/icon_sanitation.png',
+    };
+
+    await images.loadAll(iconPaths.values.toList());
     sprites = {
-      Building.solar: Sprite(images.fromCache('images/icons/icon_solar.png')),
-      Building.eolica: Sprite(images.fromCache('images/icons/icon_wind.png')),
-      Building.eficiencia:
-          Sprite(images.fromCache('images/icons/icon_efficiency.png')),
-      Building.saneamento:
-          Sprite(images.fromCache('images/icons/icon_sanitation.png')),
+      for (final entry in iconPaths.entries)
+        entry.key: Sprite(images.fromCache(entry.value)),
     };
 
     await Flame.device.fullScreen();

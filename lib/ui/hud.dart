@@ -164,13 +164,13 @@ class _HUDState extends State<HUD> {
             child: Row(
               children: [
                 btnBuild("Solar", Building.solar,
-                    'assets/images/icons/icon_solar.png'),
+                    'assets/icons/icon_solar.png'),
                 btnBuild("Eólica", Building.eolica,
-                    'assets/images/icons/icon_wind.png'),
+                    'assets/icons/icon_wind.png'),
                 btnBuild("Eficiência", Building.eficiencia,
-                    'assets/images/icons/icon_efficiency.png'),
+                    'assets/icons/icon_efficiency.png'),
                 btnBuild("Saneamento", Building.saneamento,
-                    'assets/images/icons/icon_sanitation.png'),
+                    'assets/icons/icon_sanitation.png'),
                 const SizedBox(width: 8),
                 btnRemove(),
               ],
