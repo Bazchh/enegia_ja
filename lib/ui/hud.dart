@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../../game/energy_game.dart';
-import '../../../game/state/game_state.dart';
+import '../game/energy_game.dart';
+import '../game/state/game_state.dart';
 
 class HUD extends StatefulWidget {
   final EnergyGame game;
