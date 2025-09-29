@@ -27,7 +27,4 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/images/icons/icon_solar.png
-    - assets/images/icons/icon_wind.png
-    - assets/images/icons/icon_efficiency.png
-    - assets/images/icons/icon_sanitation.png
+    - assets/images/icons/

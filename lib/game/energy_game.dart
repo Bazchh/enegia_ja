@@ -58,7 +58,7 @@ class EnergyGame extends FlameGame {
       Building.saneamento: 'icons/icon_sanitation.png',
     };
 
-    await images.loadAll(iconPaths.values);
+    await images.loadAll(iconPaths.values.toList());
     sprites = {
       for (final entry in iconPaths.entries)
         entry.key: Sprite(images.fromCache(entry.value)),
