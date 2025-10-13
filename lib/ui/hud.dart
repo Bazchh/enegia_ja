@@ -173,6 +173,11 @@ class _HUDState extends State<HUD> {
                     'assets/icons/icon_sanitation.png'),
                 const SizedBox(width: 8),
                 btnRemove(),
+                const SizedBox(width: 16),
+                FilledButton(
+                  onPressed: () => setState(() => widget.game.endTurn()),
+                  child: const Text('Avançar turno'),
+                ),
               ],
             ),
           ),
