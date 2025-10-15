@@ -60,7 +60,7 @@ class GameState {
   late List<List<CellModel>> grid;
 
   GameState({this.size = 10}) {
-    grid = List.generate(size, (_) => List.generate(size, (_) => CellModel()));
+    grid = List.generate(size, () => List.generate(size, () => CellModel()));
   }
 
   factory GameState.fromJson(Map<String, dynamic> json) {
