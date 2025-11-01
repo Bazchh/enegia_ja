@@ -37,13 +37,13 @@ class EnergyGame extends FlameGame {
   double costOf(Building b) {
     switch (b) {
       case Building.solar:
-        return 9.0;
+        return 8.5;
       case Building.eolica:
-        return 11.0;
+        return 10.0;
       case Building.eficiencia:
-        return 7.0;
+        return 6.5;
       case Building.saneamento:
-        return 7.5;
+        return 7.0;
       case Building.vazio:
         return 0.0;
     }
@@ -227,12 +227,12 @@ class EnergyGame extends FlameGame {
       ..acessoEnergia = (builtCells / totalCells).clamp(0, 1).toDouble()
       ..limpa = cleanRatio.clamp(0, 1).toDouble()
       ..tarifa = _computeTarifa(cleanSources, builtCells, efficiencyCount)
-      ..saude = (0.45 + sanitationCount / totalCells * 0.55).clamp(0, 1).toDouble()
-      ..educacao = (0.40 + efficiencyCount / totalCells * 0.45).clamp(0, 1).toDouble()
+      ..saude = (0.40 + sanitationCount / totalCells * 0.60).clamp(0, 1).toDouble()
+      ..educacao = (0.35 + efficiencyCount / totalCells * 0.55).clamp(0, 1).toDouble()
       ..desigualdade =
-          (0.55 - (sanitationCount + efficiencyCount) / totalCells * 0.35)
+          (0.60 - (sanitationCount + efficiencyCount) / totalCells * 0.45)
               .clamp(0, 1).toDouble()
-      ..clima = (0.5 + cleanSources / totalCells * 0.5).clamp(0, 1).toDouble();
+      ..clima = (0.45 + cleanSources / totalCells * 0.55).clamp(0, 1).toDouble();
   }
 
   double _computeTarifa(
@@ -242,9 +242,9 @@ class EnergyGame extends FlameGame {
   ) {
     if (builtCells == 0) return 1.0;
     final dirtySources = builtCells - cleanSources;
-    final base = 1.05 + dirtySources / builtCells * 0.35;
-    final discounts = (efficiencyCount * 0.06).clamp(0, 0.4);
-    return (base * (1 - discounts)).clamp(0.6, 1.4);
+    final base = 1.0 + dirtySources / builtCells * 0.40;
+    final discounts = (efficiencyCount * 0.08).clamp(0, 0.45);
+    return (base * (1 - discounts)).clamp(0.55, 1.35);
   }
 
   int _count(Building b) {
