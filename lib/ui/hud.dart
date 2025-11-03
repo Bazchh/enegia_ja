@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../game/energy_game.dart';
 import '../game/state/game_state.dart';
+import '../multiplayer/multiplayer_game.dart';
 
 class HUD extends StatefulWidget {
   final EnergyGame game;
@@ -27,7 +28,12 @@ class _HUDState extends State<HUD> {
         widget.game.lastPlaceResult = null;
         if (mounted && context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Orçamento insuficiente')),
+            const SnackBar(
+              content: Text('Orçamento insuficiente'),
+              backgroundColor: Colors.redAccent,
+              behavior: SnackBarBehavior.floating,
+              duration: Duration(seconds: 2),
+            ),
           );
         }
       }
@@ -85,6 +91,11 @@ class _HUDState extends State<HUD> {
 
   Widget _buildBar(GameState s) {
     final g = widget.game;
+    final multiplayer = g is MultiplayerGame ? g : null;
+    final canAct = multiplayer == null || multiplayer.isLocalTurn;
+    final statusLabel = multiplayer == null
+        ? null
+        : (canAct ? 'Sua vez' : 'Aguardando o outro jogador');
 
     // Agora com tooltip e animação de seleção + disabled quando não cabe no orçamento
     Widget btnBuild(String label, Building b, String asset, String tooltip) {
@@ -115,8 +126,14 @@ class _HUDState extends State<HUD> {
           });
 
       final button = selected
-          ? FilledButton(onPressed: affordable ? onTap : null, child: buttonChild)
-          : FilledButton.tonal(onPressed: affordable ? onTap : null, child: buttonChild);
+          ? FilledButton(
+              onPressed: affordable && canAct ? onTap : null,
+              child: buttonChild,
+            )
+          : FilledButton.tonal(
+              onPressed: affordable && canAct ? onTap : null,
+              child: buttonChild,
+            );
 
       return Padding(
         padding: const EdgeInsets.only(right: 12),
@@ -152,11 +169,11 @@ class _HUDState extends State<HUD> {
       final button = active
           ? FilledButton(
               style: FilledButton.styleFrom(backgroundColor: Colors.red),
-              onPressed: () => setState(() => g.removeMode = false),
+              onPressed: canAct ? () => setState(() => g.removeMode = false) : null,
               child: child,
             )
           : FilledButton.tonal(
-              onPressed: () => setState(() => g.removeMode = true),
+              onPressed: canAct ? () => setState(() => g.removeMode = true) : null,
               child: child,
             );
 
@@ -214,9 +231,18 @@ class _HUDState extends State<HUD> {
                 btnRemove(),
                 const SizedBox(width: 16),
                 FilledButton(
-                  onPressed: () => setState(() => widget.game.endTurn()),
-                  child: const Text('Avançar turno'),
+                  onPressed: canAct
+                      ? () => setState(() => widget.game.endTurn())
+                      : null,
+                  child: const Text('Avancar turno'),
                 ),
+                if (statusLabel != null) ...[
+                  const SizedBox(width: 16),
+                  Text(
+                    statusLabel,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
               ],
             ),
           ),
