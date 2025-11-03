@@ -54,6 +54,24 @@ Em desenvolvimento 🔧
 
 <p align="center"><em>Visualização da interface principal do projeto</em></p>
 
+<p align="center">
+  <img src="assets/images/preview/tela_de_jogo.jpg" 
+       alt="Preview do Projeto" 
+       width="300" 
+       style="border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.2);" />
+</p>
+
+<p align="center"><em>Visualização da interface principal do jogo</em></p>
+
+<p align="center">
+  <img src="assets/images/preview/tela_opcoes_mult.png" 
+       alt="Preview do Projeto" 
+       width="300" 
+       style="border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.2);" />
+</p>
+
+<p align="center"><em>Visualização da interface do modo multiplayer</em></p>
+
 ---
 
 ## 📄 Licença
