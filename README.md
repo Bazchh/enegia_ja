@@ -45,7 +45,14 @@ Em desenvolvimento 🔧
 
 ## 📷 Preview
 
-_(Passos futuros)_
+<p align="center">
+  <img src="assets/images/preview/tela_inicial.jpg" 
+       alt="Preview do Projeto" 
+       width="300" 
+       style="border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.2);" />
+</p>
+
+<p align="center"><em>Visualização da interface principal do projeto</em></p>
 
 ---
 
