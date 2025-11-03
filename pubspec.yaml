@@ -1,6 +1,6 @@
 name: enegia_ja
 description: "ODS Energia Acessível e Limpa"
-publish_to: 'none' 
+publish_to: 'none'
 
 version: 1.0.0+1
 
@@ -28,3 +28,7 @@ flutter:
 
   assets:
     - assets/images/icons/
+    - assets/images/icons/icon_solar.png
+    - assets/images/icons/icon_wind.png
+    - assets/images/icons/icon_efficiency.png
+    - assets/images/icons/icon_sanitation.png
