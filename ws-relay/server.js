@@ -1,63 +1,83 @@
-import { WebSocketServer } from 'ws';
+﻿import { WebSocketServer } from 'ws';
 
-     const rooms = new Map(); // roomId -> Map(playerId -> ws)
+const rooms = new Map(); // roomId -> Map(playerId -> ws)
 
-     const wss = new WebSocketServer({ port: 8083 });
-     console.log('Servidor WS escutando na porta 8080');
+const wss = new WebSocketServer({ port: 8083 });
+console.log('Servidor WS escutando na porta 8083');
 
-     wss.on('connection', (ws) => {
-       let roomId;
-       let playerId;
+wss.on('connection', (ws) => {
+  let roomId;
+  let playerId;
 
-       ws.on('message', (raw) => {
-         let data;
-         try {
-           data = JSON.parse(raw);
-         } catch {
-           return;
-         }
+  ws.on('message', (raw) => {
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      return;
+    }
 
-         switch (data.type) {
-           case 'join':
-             roomId = data.roomId;
-             playerId = data.playerId;
-             if (!rooms.has(roomId)) {
-               rooms.set(roomId, new Map());
-             }
-             rooms.get(roomId).set(playerId, ws);
-             broadcast(roomId, { type: 'join', playerId, roomId }, playerId);
-             break;
+    const type = data.type;
 
-           case 'state_update':
-             if (!roomId) return;
-             broadcast(roomId, data, playerId);
-             break;
+    switch (type) {
+      case 'join':
+        roomId = data.roomId;
+        playerId = data.playerId;
+        if (!roomId || !playerId) {
+          return;
+        }
+        if (!rooms.has(roomId)) {
+          rooms.set(roomId, new Map());
+        }
+        rooms.get(roomId).set(playerId, ws);
+        broadcast(roomId, { type: 'join', playerId, roomId }, playerId);
+        break;
 
-           case 'leave':
-             cleanup(roomId, playerId);
-             broadcast(roomId, data, playerId);
-             break;
-         }
-       });
+      case 'leave':
+        broadcast(roomId, data, playerId);
+        cleanup(roomId, playerId);
+        break;
 
-       ws.on('close', () => cleanup(roomId, playerId));
-     });
+      case 'state_update':
+      case 'action_request':
+      case 'turn_update':
+      case 'lobby_state':
+      case 'ready_update':
+      case 'color_update':
+      case 'chat':
+      case 'countdown':
+      case 'start_game':
+        if (!roomId) return;
+        broadcast(roomId, data, playerId);
+        break;
 
-     function broadcast(roomId, message, senderId) {
-       const room = rooms.get(roomId);
-       if (!room) return;
-       for (const [pid, socket] of room.entries()) {
-         if (pid === senderId) continue;
-         if (socket.readyState === socket.OPEN) {
-           socket.send(JSON.stringify(message));
-         }
-       }
-     }
+      default:
+        break;
+    }
+  });
 
-     function cleanup(roomId, playerId) {
-       if (!roomId || !playerId) return;
-       const room = rooms.get(roomId);
-       if (!room) return;
-       room.delete(playerId);
-       if (room.size === 0) rooms.delete(roomId);
-     }
+  ws.on('close', () => cleanup(roomId, playerId));
+  ws.on('error', () => cleanup(roomId, playerId));
+});
+
+function broadcast(roomId, message, senderId) {
+  const room = rooms.get(roomId);
+  if (!room) return;
+  const encoded = JSON.stringify(message);
+  for (const [pid, socket] of room.entries()) {
+    if (pid === senderId) continue;
+    if (socket.readyState === socket.OPEN) {
+      socket.send(encoded);
+    }
+  }
+}
+
+function cleanup(roomId, playerId) {
+  if (!roomId || !playerId) return;
+  const room = rooms.get(roomId);
+  if (!room) return;
+  room.delete(playerId);
+  if (room.size === 0) {
+    rooms.delete(roomId);
+  }
+}

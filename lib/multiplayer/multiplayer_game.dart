@@ -7,6 +7,7 @@ import 'game_socket.dart';
 class MultiplayerGame extends EnergyGame {
   final GameSocket socket;
   final bool isHost;
+  final bool _ownsSocket;
 
   final List<String> _playerOrder = [];
   String? _currentPlayerId;
@@ -17,28 +18,56 @@ class MultiplayerGame extends EnergyGame {
   List<String> get players => List.unmodifiable(_playerOrder);
   String? get currentPlayerId => _currentPlayerId;
 
-  MultiplayerGame({String? roomId, this.isHost = false})
-      : socket = GameSocket(roomId: roomId),
-        super() {
+  void _registerSocketCallbacks() {
     socket.onStateUpdate = _handleRemoteStateUpdate;
     socket.onPlayerJoined = _handlePlayerJoined;
     socket.onPlayerLeft = _handlePlayerLeft;
     socket.onError = _handleError;
     socket.onActionRequest = _handleActionRequest;
     socket.onTurnUpdate = _handleTurnUpdate;
+  }
 
-    if (isHost) {
+  void _onConnected() {
+    if (!isHost) return;
+    if (_playerOrder.isEmpty) {
       _playerOrder.add(socket.playerId);
-      _currentPlayerId = socket.playerId;
+    }
+    _currentPlayerId ??= _playerOrder.first;
+    _broadcastTurnInfo();
+    _syncGameState();
+  }
+
+  MultiplayerGame({
+    String? roomId,
+    GameSocket? existingSocket,
+    this.isHost = false,
+    List<String>? initialPlayers,
+  })  : socket = existingSocket ?? GameSocket(roomId: roomId),
+        _ownsSocket = existingSocket == null,
+        super() {
+    _registerSocketCallbacks();
+
+    if (initialPlayers != null && initialPlayers.isNotEmpty) {
+      _playerOrder
+        ..clear()
+        ..addAll(initialPlayers);
+    } else if (!_playerOrder.contains(socket.playerId)) {
+      _playerOrder.add(socket.playerId);
     }
 
-    socket.connect().then((connected) {
-      if (!connected) return;
-      if (isHost) {
-        _broadcastTurnInfo();
-        _syncGameState();
-      }
-    });
+    if (isHost) {
+      _currentPlayerId =
+          _playerOrder.isNotEmpty ? _playerOrder.first : socket.playerId;
+    }
+
+    if (_ownsSocket) {
+      socket.connect().then((connected) {
+        if (!connected) return;
+        _onConnected();
+      });
+    } else {
+      _onConnected();
+    }
   }
 
   @override

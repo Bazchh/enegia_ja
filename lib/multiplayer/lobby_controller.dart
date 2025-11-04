@@ -339,7 +339,11 @@ class LobbyController extends ChangeNotifier {
     final playersJson = {
       for (final entry in _players.entries) entry.key: entry.value.toJson(),
     };
-    socket.sendLobbyState(playersJson, order: List<String>.from(_order));
+    socket.sendLobbyState(
+      playersJson,
+      order: List<String>.from(_order),
+      seconds: _countdownSeconds,
+    );
   }
 
   void _evaluateCountdown() {

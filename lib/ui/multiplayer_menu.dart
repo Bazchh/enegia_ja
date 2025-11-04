@@ -1,6 +1,7 @@
-import 'package:flutter/material.dart';
-import '../multiplayer/multiplayer_game.dart';
-import 'game_screen.dart';
+﻿import 'package:flutter/material.dart';
+
+import '../multiplayer/lobby_controller.dart';
+import 'lobby_screen.dart';
 
 class MultiplayerMenu extends StatefulWidget {
   const MultiplayerMenu({super.key});
@@ -17,7 +18,7 @@ class _MultiplayerMenuState extends State<MultiplayerMenu> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Energia Já! - Multiplayer'),
+        title: const Text('Energia Ja! - Multiplayer'),
       ),
       body: Center(
         child: Padding(
@@ -25,14 +26,11 @@ class _MultiplayerMenuState extends State<MultiplayerMenu> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Título
               const Text(
                 'Modo Multiplayer',
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 40),
-              
-              // Opções
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -58,8 +56,6 @@ class _MultiplayerMenuState extends State<MultiplayerMenu> {
                 ],
               ),
               const SizedBox(height: 30),
-              
-              // Campo de entrada para ID da sala (apenas para entrar)
               if (!_isCreatingRoom)
                 TextField(
                   controller: _roomController,
@@ -70,8 +66,6 @@ class _MultiplayerMenuState extends State<MultiplayerMenu> {
                   ),
                 ),
               const SizedBox(height: 30),
-              
-              // Botão de ação
               FilledButton(
                 onPressed: () {
                   if (_isCreatingRoom) {
@@ -90,26 +84,10 @@ class _MultiplayerMenuState extends State<MultiplayerMenu> {
   }
 
   void _createRoom() {
-    // Cria um novo jogo multiplayer como host
-    final game = MultiplayerGame(isHost: true);
-    
-    // Mostra o ID da sala
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('ID da sala: ${game.socket.roomId}'),
-        action: SnackBarAction(
-          label: 'Copiar',
-          onPressed: () {
-            // Em uma implementação real, copiaria para a área de transferência
-          },
-        ),
-      ),
-    );
-    
-    // Navega para a tela do jogo
+    final controller = LobbyController(isHost: true);
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => GameScreen(game: game),
+        builder: (context) => LobbyScreen(controller: controller),
       ),
     );
   }
@@ -122,14 +100,11 @@ class _MultiplayerMenuState extends State<MultiplayerMenu> {
       );
       return;
     }
-    
-    // Cria um jogo multiplayer como participante
-    final game = MultiplayerGame(roomId: roomId);
-    
-    // Navega para a tela do jogo
+
+    final controller = LobbyController(roomId: roomId, isHost: false);
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => GameScreen(game: game),
+        builder: (context) => LobbyScreen(controller: controller),
       ),
     );
   }

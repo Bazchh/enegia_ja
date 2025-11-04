@@ -8,7 +8,7 @@ import '../game/state/game_state.dart';
 
 const _defaultWsUrl = String.fromEnvironment(
   'WS_URL',
-  defaultValue: 'ws://10.0.2.2:8083',
+  defaultValue: 'ws://192.168.1.5:8083',
 );
 
 class GameSocket {
@@ -16,12 +16,21 @@ class GameSocket {
   final String roomId;
   final String _endpoint;
   WebSocketChannel? _channel;
+
+  // Game callbacks
   Function(GameState)? onStateUpdate;
   Function(String, String)? onPlayerJoined;
   Function(String)? onPlayerLeft;
   Function(String)? onError;
   Function(String, Map<String, dynamic>)? onActionRequest;
   Function(String, List<String>)? onTurnUpdate;
+
+  // Lobby callbacks
+  Function(Map<String, dynamic>)? onLobbyState;
+  Function(String, Map<String, dynamic>)? onLobbyCommand;
+  Function(String, String)? onChatMessage;
+  Function(int)? onCountdown;
+  Function()? onStartGame;
 
   GameSocket({String? roomId, String? endpoint})
       : playerId = const Uuid().v4(),
@@ -31,6 +40,9 @@ class GameSocket {
   bool get isConnected => _channel != null;
 
   Future<bool> connect() async {
+    if (isConnected) {
+      return true;
+    }
     try {
       final uri = Uri.parse(_endpoint);
       _channel = WebSocketChannel.connect(uri);
@@ -70,6 +82,8 @@ class GameSocket {
     }
   }
 
+  // ===== Game messaging =====
+
   void sendGameState(GameState state) {
     if (!isConnected) return;
     _sendMessage({
@@ -98,6 +112,74 @@ class GameSocket {
       'roomId': roomId,
       'currentPlayerId': currentId,
       'players': players,
+    });
+  }
+
+  // ===== Lobby messaging =====
+
+  void sendLobbyState(
+    Map<String, dynamic> players, {
+    List<String>? order,
+    int? seconds,
+  }) {
+    if (!isConnected) return;
+    _sendMessage({
+      'type': 'lobby_state',
+      'playerId': playerId,
+      'roomId': roomId,
+      'players': players,
+      if (order != null) 'order': order,
+      if (seconds != null) 'seconds': seconds,
+    });
+  }
+
+  void sendReadyState(bool ready) {
+    if (!isConnected) return;
+    _sendMessage({
+      'type': 'ready_update',
+      'playerId': playerId,
+      'roomId': roomId,
+      'ready': ready,
+    });
+  }
+
+  void sendColorChoice(String colorHex) {
+    if (!isConnected) return;
+    _sendMessage({
+      'type': 'color_update',
+      'playerId': playerId,
+      'roomId': roomId,
+      'color': colorHex,
+    });
+  }
+
+  void sendChat(String message) {
+    if (!isConnected || message.trim().isEmpty) return;
+    _sendMessage({
+      'type': 'chat',
+      'playerId': playerId,
+      'roomId': roomId,
+      'message': message,
+      'timestamp': DateTime.now().toIso8601String(),
+    });
+  }
+
+  void sendCountdown(int seconds) {
+    if (!isConnected) return;
+    _sendMessage({
+      'type': 'countdown',
+      'playerId': playerId,
+      'roomId': roomId,
+      'seconds': seconds,
+    });
+  }
+
+  void sendStartGameSignal() {
+    if (!isConnected) return;
+    _sendMessage({
+      'type': 'start_game',
+      'playerId': playerId,
+      'roomId': roomId,
     });
   }
 
@@ -143,6 +225,53 @@ class GameSocket {
             final currentId = data['currentPlayerId']?.toString() ?? '';
             onTurnUpdate!(currentId, players);
           }
+          break;
+        case 'lobby_state':
+          if (onLobbyState != null) {
+            final players =
+                Map<String, dynamic>.from(data['players'] ?? <String, dynamic>{});
+            final payload = <String, dynamic>{
+              'players': players,
+            };
+            if (data['order'] is List) {
+              payload['order'] = (data['order'] as List)
+                  .map((e) => e.toString())
+                  .toList();
+            }
+            if (data['seconds'] is num) {
+              payload['seconds'] = (data['seconds'] as num).toInt();
+            }
+            onLobbyState!(payload);
+          }
+          break;
+        case 'ready_update':
+        case 'color_update':
+          if (onLobbyCommand != null) {
+            final payload = Map<String, dynamic>.from(data)
+              ..remove('type')
+              ..remove('roomId')
+              ..remove('playerId');
+            onLobbyCommand!(data['playerId'], payload);
+          }
+          break;
+        case 'chat':
+          if (onChatMessage != null) {
+            final messageText = data['message']?.toString() ?? '';
+            if (messageText.isNotEmpty) {
+              onChatMessage!(data['playerId'], messageText);
+            }
+          }
+          break;
+        case 'countdown':
+          if (onCountdown != null) {
+            final seconds = data['seconds'] is num
+                ? (data['seconds'] as num).toInt()
+                : -1;
+            onCountdown!(seconds);
+          }
+          break;
+        case 'start_game':
+          onStartGame?.call();
           break;
       }
     } catch (e) {
