@@ -60,6 +60,7 @@ class EnergyGame extends FlameGame {
 
   void setLocalPlayer(String playerId) {
     _localPlayerId = playerId;
+    state.ensurePlayer(playerId);
     _ownerColors.putIfAbsent(
       playerId,
       () => Colors.lightBlueAccent,
@@ -86,6 +87,15 @@ class EnergyGame extends FlameGame {
     }
     return _ownerColors[ownerId] ?? Colors.grey.shade600;
   }
+
+  PlayerState _playerState(String playerId) {
+    state.ensurePlayer(playerId);
+    return state.playerStates[playerId]!;
+  }
+
+  PlayerState get localPlayerState => _playerState(_localPlayerId);
+
+  PlayerState playerStateFor(String playerId) => _playerState(playerId);
 
   @override
   Future<void> onLoad() async {
@@ -167,6 +177,7 @@ class EnergyGame extends FlameGame {
 
   PlaceResult placeAt(int x, int y, {String? actingPlayerId}) {
     final playerId = actingPlayerId ?? _localPlayerId;
+    final actingState = _playerState(playerId);
 
     if (_outOfBounds(x, y) || state.acabou()) {
       return lastPlaceResult = PlaceResult.invalido;
@@ -180,11 +191,9 @@ class EnergyGame extends FlameGame {
         return lastPlaceResult = PlaceResult.invalido;
       }
 
-      if (cell.b == Building.vazio) {
-        return lastPlaceResult = PlaceResult.invalido;
-      }
       final refund = costOf(cell.b) * 0.5;
-      state.orcamento += refund;
+      final refundOwner = cell.ownerId ?? playerId;
+      _playerState(refundOwner).orcamento += refund;
       cell
         ..b = Building.vazio
         ..powered = false;
@@ -204,11 +213,11 @@ class EnergyGame extends FlameGame {
     }
 
     final custo = costOf(building);
-    if (state.orcamento < custo) {
+    if (actingState.orcamento < custo) {
       return lastPlaceResult = PlaceResult.semOrcamento;
     }
 
-    state.orcamento -= custo;
+    actingState.orcamento -= custo;
     cell
       ..b = building
       ..powered = true
@@ -224,8 +233,11 @@ class EnergyGame extends FlameGame {
     if (state.acabou()) return;
     state.turno += 1;
 
-    final efficiencyBonus = _count(Building.eficiencia) * 0.5;
-    state.orcamento += 4 + efficiencyBonus;
+    for (final playerId in state.registeredPlayers) {
+      final efficiencyBonus =
+          _countOwned(playerId, Building.eficiencia) * 0.5;
+      _playerState(playerId).orcamento += 4 + efficiencyBonus;
+    }
 
     _recomputeMetrics();
     _captureProgress();
@@ -234,52 +246,76 @@ class EnergyGame extends FlameGame {
 
   void _recomputeMetrics() {
     final totalCells = (state.size * state.size).toDouble();
-    int energized = 0;
-    int cleanSources = 0;
-    int efficiencyCount = 0;
-    int sanitationCount = 0;
+    final global = _MetricAccumulator()..territory = state.size * state.size;
+    final perPlayer = <String, _MetricAccumulator>{};
 
     for (var x = 0; x < state.size; x++) {
       for (var y = 0; y < state.size; y++) {
         final cell = state.grid[x][y];
-        final building = cell.b;
-        if (building != Building.vazio) {
-          energized++;
-          cell.powered = true;
-        } else {
-          cell.powered = false;
+        final owner = cell.ownerId;
+        if (owner != null) {
+          state.ensurePlayer(owner);
+          perPlayer.putIfAbsent(owner, _MetricAccumulator.new).territory++;
         }
 
-        switch (building) {
-          case Building.solar:
-          case Building.eolica:
-            cleanSources++;
-            break;
-          case Building.eficiencia:
-            efficiencyCount++;
-            break;
-          case Building.saneamento:
-            sanitationCount++;
-            break;
-          case Building.vazio:
-            break;
+        if (cell.b != Building.vazio) {
+          cell.powered = true;
+          global.record(cell.b);
+          if (owner != null) {
+            perPlayer.putIfAbsent(owner, _MetricAccumulator.new).record(cell.b);
+          }
+        } else {
+          cell.powered = false;
         }
       }
     }
 
-    final builtCells = energized.toDouble();
-    final cleanRatio = builtCells == 0 ? 0 : cleanSources / builtCells;
+    for (final entry in state.playerStates.entries) {
+      final playerId = entry.key;
+      final player = entry.value;
+      final acc = perPlayer[playerId];
+      if (acc == null || acc.territory == 0) {
+        player.metrics.reset();
+        continue;
+      }
+      final territory = acc.territory.toDouble();
+      final built = acc.built.toDouble();
+      final cleanRatio = built == 0 ? 0 : acc.clean / built;
+
+      player.metrics
+        ..acessoEnergia = (built / territory).clamp(0, 1).toDouble()
+        ..limpa = cleanRatio.clamp(0, 1).toDouble()
+        ..tarifa = _computeTarifa(acc.clean, built, acc.efficiency)
+        ..saude =
+            (0.40 + acc.sanitation / territory * 0.60).clamp(0, 1).toDouble()
+        ..educacao =
+            (0.35 + acc.efficiency / territory * 0.55).clamp(0, 1).toDouble()
+        ..desigualdade =
+            (0.60 - (acc.sanitation + acc.efficiency) / territory * 0.45)
+                .clamp(0, 1)
+                .toDouble()
+        ..clima =
+            (0.45 + acc.clean / territory * 0.55).clamp(0, 1).toDouble();
+    }
+
+    final builtGlobal = global.built.toDouble();
+    final cleanRatioGlobal =
+        builtGlobal == 0 ? 0 : global.clean / builtGlobal;
 
     state.metrics
-      ..acessoEnergia = (builtCells / totalCells).clamp(0, 1).toDouble()
-      ..limpa = cleanRatio.clamp(0, 1).toDouble()
-      ..tarifa = _computeTarifa(cleanSources, builtCells, efficiencyCount)
-      ..saude = (0.40 + sanitationCount / totalCells * 0.60).clamp(0, 1).toDouble()
-      ..educacao = (0.35 + efficiencyCount / totalCells * 0.55).clamp(0, 1).toDouble()
+      ..acessoEnergia = (builtGlobal / totalCells).clamp(0, 1).toDouble()
+      ..limpa = cleanRatioGlobal.clamp(0, 1).toDouble()
+      ..tarifa = _computeTarifa(global.clean, builtGlobal, global.efficiency)
+      ..saude =
+          (0.40 + global.sanitation / totalCells * 0.60).clamp(0, 1).toDouble()
+      ..educacao =
+          (0.35 + global.efficiency / totalCells * 0.55).clamp(0, 1).toDouble()
       ..desigualdade =
-          (0.60 - (sanitationCount + efficiencyCount) / totalCells * 0.45)
-              .clamp(0, 1).toDouble()
-      ..clima = (0.45 + cleanSources / totalCells * 0.55).clamp(0, 1).toDouble();
+          (0.60 - (global.sanitation + global.efficiency) / totalCells * 0.45)
+              .clamp(0, 1)
+              .toDouble()
+      ..clima =
+          (0.45 + global.clean / totalCells * 0.55).clamp(0, 1).toDouble();
   }
 
   double _computeTarifa(
@@ -294,15 +330,19 @@ class EnergyGame extends FlameGame {
     return (base * (1 - discounts)).clamp(0.55, 1.35);
   }
 
-  int _count(Building b) {
+  int _countOwned(String playerId, Building b) {
     int c = 0;
     for (var x = 0; x < state.size; x++) {
       for (var y = 0; y < state.size; y++) {
-        if (state.grid[x][y].b == b) c++;
+        final cell = state.grid[x][y];
+        if (cell.ownerId == playerId && cell.b == b) {
+          c++;
+        }
       }
     }
     return c;
   }
+
 
   bool _outOfBounds(int x, int y) =>
       x < 0 || y < 0 || x >= state.size || y >= state.size;
@@ -387,20 +427,60 @@ class EnergyGame extends FlameGame {
   Future<void> loadGame() async {
     final sp = await SharedPreferences.getInstance();
     final raw = sp.getString(_stateKey);
-    if (raw == null) {
-      _recomputeMetrics();
-      selecionado ??= Building.solar;
-      return;
-    }
-    try {
-      final data = jsonDecode(raw);
-      if (data is Map<String, dynamic>) {
-        state = GameState.fromJson(data);
+    Map<String, dynamic>? data;
+
+    if (raw != null) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map<String, dynamic>) {
+          data = decoded;
+          state = GameState.fromJson(decoded);
+        } else {
+          state = GameState(size: state.size);
+        }
+      } catch (_) {
+        state = GameState(size: state.size);
       }
-    } catch (_) {
-      state = GameState(size: 10);
+    } else {
+      state = GameState(size: state.size);
     }
+
+    final hasPlayers = data is Map<String, dynamic> && data['players'] is Map;
+    final legacyBudget =
+        data is Map<String, dynamic> ? (data['orcamento'] ?? 100).toDouble() : 100.0;
+
+    final localState = _playerState(_localPlayerId);
+    if (!hasPlayers) {
+      localState.orcamento = legacyBudget;
+    }
+
     _recomputeMetrics();
     selecionado ??= Building.solar;
+  }
+}
+
+class _MetricAccumulator {
+  int territory = 0;
+  int built = 0;
+  int clean = 0;
+  int efficiency = 0;
+  int sanitation = 0;
+
+  void record(Building building) {
+    built++;
+    switch (building) {
+      case Building.solar:
+      case Building.eolica:
+        clean++;
+        break;
+      case Building.eficiencia:
+        efficiency++;
+        break;
+      case Building.saneamento:
+        sanitation++;
+        break;
+      case Building.vazio:
+        break;
+    }
   }
 }
