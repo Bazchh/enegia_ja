@@ -71,8 +71,6 @@ class _LobbyScreenState extends State<LobbyScreen> {
     final error = _controller.errorMessage;
     final countdown = _controller.countdownSeconds;
 
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Lobby Multiplayer'),
@@ -103,7 +101,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
         child: AnimatedPadding(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOut,
-          padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomInset),
+          padding: const EdgeInsets.all(16),
           child: Column(
             children: [
               if (error != null)
@@ -137,9 +135,10 @@ class _LobbyScreenState extends State<LobbyScreen> {
                   builder: (context, constraints) {
                     final isWide = constraints.maxWidth > 720;
                     final playersSection = _buildPlayersSection(theme);
-                    final chatSection = _buildChatSection(theme);
                     if (isWide) {
+                      final chatSection = _buildChatSection(theme);
                       return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Expanded(child: playersSection),
                           const SizedBox(width: 16),
@@ -147,9 +146,16 @@ class _LobbyScreenState extends State<LobbyScreen> {
                         ],
                       );
                     }
+                    final chatSection = _buildChatSection(theme);
                     return Column(
                       children: [
-                        playersSection,
+                        Flexible(
+                          fit: FlexFit.loose,
+                          child: SingleChildScrollView(
+                            padding: EdgeInsets.zero,
+                            child: playersSection,
+                          ),
+                        ),
                         const SizedBox(height: 16),
                         Expanded(child: chatSection),
                       ],
@@ -265,6 +271,31 @@ class _LobbyScreenState extends State<LobbyScreen> {
   Widget _buildChatSection(ThemeData theme) {
     final chat = _controller.chatMessages;
 
+    final messages = ListView.builder(
+      physics: const ClampingScrollPhysics(),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      itemCount: chat.length,
+      itemBuilder: (context, index) {
+        final message = chat[index];
+        final playerTag = message.playerId.substring(0, 6).toUpperCase();
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: RichText(
+            text: TextSpan(
+              style: theme.textTheme.bodyMedium,
+              children: [
+                TextSpan(
+                  text: '$playerTag: ',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                TextSpan(text: message.message),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -274,28 +305,15 @@ class _LobbyScreenState extends State<LobbyScreen> {
             Text('Chat', style: theme.textTheme.titleMedium),
             const SizedBox(height: 12),
             Expanded(
-              child: ListView.builder(
-                itemCount: chat.length,
-                itemBuilder: (context, index) {
-                  final message = chat[index];
-                  final playerTag = message.playerId.substring(0, 6).toUpperCase();
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: RichText(
-                      text: TextSpan(
+              child: chat.isEmpty
+                  ? Align(
+                      alignment: Alignment.topLeft,
+                      child: Text(
+                        'Nenhuma mensagem ainda.',
                         style: theme.textTheme.bodyMedium,
-                        children: [
-                          TextSpan(
-                            text: '$playerTag: ',
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          TextSpan(text: message.message),
-                        ],
                       ),
-                    ),
-                  );
-                },
-              ),
+                    )
+                  : messages,
             ),
             const SizedBox(height: 12),
             Row(
