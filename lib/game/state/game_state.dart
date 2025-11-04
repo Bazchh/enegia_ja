@@ -30,6 +30,16 @@ class Metrics {
         'desigualdade': desigualdade,
         'clima': clima,
       };
+
+  void reset() {
+    acessoEnergia = 0;
+    limpa = 0;
+    tarifa = 1.0;
+    saude = 0.6;
+    educacao = 0.5;
+    desigualdade = 0.5;
+    clima = 0.6;
+  }
 }
 
 class CellModel {
@@ -59,12 +69,39 @@ class CellModel {
       };
 }
 
+class PlayerState {
+  double orcamento;
+  final Metrics metrics;
+
+  PlayerState({
+    this.orcamento = 100,
+    Metrics? metrics,
+  }) : metrics = metrics ?? Metrics();
+
+  factory PlayerState.fromJson(Map<String, dynamic> json) => PlayerState(
+        orcamento: (json['orcamento'] ?? 100).toDouble(),
+        metrics: json['metrics'] is Map<String, dynamic>
+            ? Metrics.fromJson(json['metrics'] as Map<String, dynamic>)
+            : Metrics(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'orcamento': orcamento,
+        'metrics': metrics.toJson(),
+      };
+
+  void reset() {
+    orcamento = 100;
+    metrics.reset();
+  }
+}
+
 class GameState {
   final int size;
   int turno = 1;
-  double orcamento = 100; // créditos
   final metrics = Metrics();
   late List<List<CellModel>> grid;
+  final Map<String, PlayerState> playerStates = {};
 
   GameState({this.size = 10}) {
     grid = List.generate(size, (_) => List.generate(size, (_) => CellModel()));
@@ -73,7 +110,6 @@ class GameState {
   factory GameState.fromJson(Map<String, dynamic> json) {
     final state = GameState(size: json['size'] ?? 10);
     state.turno = json['turno'] ?? 1;
-    state.orcamento = (json['orcamento'] ?? 100).toDouble();
 
     if (json['metrics'] is Map<String, dynamic>) {
       final parsed = Metrics.fromJson(json['metrics']);
@@ -104,35 +140,57 @@ class GameState {
       }
     }
 
+    if (json['players'] is Map<String, dynamic>) {
+      final playersJson = json['players'] as Map<String, dynamic>;
+      state.playerStates
+        ..clear()
+        ..addAll(playersJson.map(
+          (key, value) => MapEntry(
+            key,
+            value is Map<String, dynamic>
+                ? PlayerState.fromJson(value)
+                : PlayerState(),
+          ),
+        ));
+    }
+
     return state;
   }
 
+  void ensurePlayer(String playerId) {
+    playerStates.putIfAbsent(playerId, PlayerState.new);
+  }
+
+  PlayerState stateFor(String playerId) {
+    ensurePlayer(playerId);
+    return playerStates[playerId]!;
+  }
+
+  Iterable<String> get registeredPlayers => playerStates.keys;
+
   void reset() {
     turno = 1;
-    orcamento = 100;
-    metrics
-      ..acessoEnergia = 0
-      ..limpa = 0
-      ..tarifa = 1.0
-      ..saude = 0.6
-      ..educacao = 0.5
-      ..desigualdade = 0.5
-      ..clima = 0.6;
+    metrics.reset();
     for (var x = 0; x < size; x++) {
       for (var y = 0; y < size; y++) {
         grid[x][y] = CellModel();
       }
+    }
+    for (final player in playerStates.values) {
+      player.reset();
     }
   }
 
   Map<String, dynamic> toJson() => {
         'size': size,
         'turno': turno,
-        'orcamento': orcamento,
         'metrics': metrics.toJson(),
         'grid': [
           for (final row in grid) [for (final cell in row) cell.toJson()],
         ],
+        'players': {
+          for (final entry in playerStates.entries) entry.key: entry.value.toJson(),
+        },
       };
 
   bool venceu() =>
