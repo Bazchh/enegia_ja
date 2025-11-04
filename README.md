@@ -80,4 +80,4 @@ Este projeto é distribuído sob a licença MIT.
 Sinta-se livre para usar, modificar e compartilhar.
 
 
-## APK LINK: https://drive.google.com/file/d/11OBrTw1vda_zxds23g3wl727PZsRHdce/view?usp=drive_link
+## APK LINK: https://drive.google.com/file/d/1lZ5kC0aK_N6-Cv0ajDWgTA22VDS_494S/view?usp=drive_link
