@@ -58,7 +58,8 @@ class Cell extends PositionComponent
       // Build: outline green/red depending on budget
       if (model.b == Building.vazio) {
         final selected = game.selecionado ?? Building.solar;
-        final canAfford = game.state.orcamento >= game.costOf(selected);
+        final canAfford =
+            game.localPlayerState.orcamento >= game.costOf(selected);
         canvas.drawRect(
           size.toRect().deflate(2),
           Paint()
