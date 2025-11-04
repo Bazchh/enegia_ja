@@ -1,9 +1,17 @@
-﻿import { WebSocketServer } from 'ws';
+﻿import http from 'http';
+import { WebSocketServer } from 'ws';
 
 const rooms = new Map(); // roomId -> Map(playerId -> ws)
+const PORT = process.env.PORT || 8083;
 
-const wss = new WebSocketServer({ port: 8083 });
-console.log('Servidor WS escutando na porta 8083');
+const server = http.createServer((req, res) => {
+  res.writeHead(200);
+  res.end('WebSocket server is running.\n');
+});
+
+const wss = new WebSocketServer({ server });
+
+console.log('Iniciando servidor WS...');
 
 wss.on('connection', (ws) => {
   let roomId;
@@ -23,12 +31,8 @@ wss.on('connection', (ws) => {
       case 'join':
         roomId = data.roomId;
         playerId = data.playerId;
-        if (!roomId || !playerId) {
-          return;
-        }
-        if (!rooms.has(roomId)) {
-          rooms.set(roomId, new Map());
-        }
+        if (!roomId || !playerId) return;
+        if (!rooms.has(roomId)) rooms.set(roomId, new Map());
         rooms.get(roomId).set(playerId, ws);
         broadcast(roomId, { type: 'join', playerId, roomId }, playerId);
         break;
@@ -77,7 +81,9 @@ function cleanup(roomId, playerId) {
   const room = rooms.get(roomId);
   if (!room) return;
   room.delete(playerId);
-  if (room.size === 0) {
-    rooms.delete(roomId);
-  }
+  if (room.size === 0) rooms.delete(roomId);
 }
+
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`Servidor HTTP/WS escutando na porta ${PORT}`);
+});
