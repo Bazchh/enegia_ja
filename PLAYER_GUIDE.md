@@ -25,7 +25,6 @@
 - Observe seu proprio HUD: metricas sao individuais, entao compare com o modal periodicamente.
 
 ## 5. Problemas comuns
-- **Erro `wss://`**: confirme que o app foi gerado com a variavel `WS_URL` apontando para o endpoint seguro.
 - **Tela travada**: se o host cair, a partida pausa; volte ao lobby ou aguarde reconexao.
 - **Economia compartilhada**: todos devem usar a versao mais recente (PlayerState por jogador). Reinicie a partida se notar valores incorretos.
 
