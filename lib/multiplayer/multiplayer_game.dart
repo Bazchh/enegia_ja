@@ -156,33 +156,9 @@ class MultiplayerGame extends EnergyGame {
   }
 
   void _handleRemoteStateUpdate(GameState remoteState) {
-    if (isHost) {
-      state.turno = remoteState.turno;
-      state.orcamento = remoteState.orcamento;
-      state.metrics
-        ..acessoEnergia = remoteState.metrics.acessoEnergia
-        ..limpa = remoteState.metrics.limpa
-        ..tarifa = remoteState.metrics.tarifa
-        ..saude = remoteState.metrics.saude
-        ..educacao = remoteState.metrics.educacao
-        ..desigualdade = remoteState.metrics.desigualdade
-        ..clima = remoteState.metrics.clima;
-      state.grid = remoteState.grid;
-      _refreshColorsFromState();
-    } else {
-      state.turno = remoteState.turno;
-      state.orcamento = remoteState.orcamento;
-      state.metrics
-        ..acessoEnergia = remoteState.metrics.acessoEnergia
-        ..limpa = remoteState.metrics.limpa
-        ..tarifa = remoteState.metrics.tarifa
-        ..saude = remoteState.metrics.saude
-        ..educacao = remoteState.metrics.educacao
-        ..desigualdade = remoteState.metrics.desigualdade
-        ..clima = remoteState.metrics.clima;
-      state.grid = remoteState.grid;
-      _refreshColorsFromState();
-    }
+    state = remoteState;
+    state.ensurePlayer(socket.playerId);
+    _refreshColorsFromState();
   }
 
   void _handlePlayerJoined(String playerId, String roomId) {
@@ -192,6 +168,7 @@ class MultiplayerGame extends EnergyGame {
       _playerOrder.add(playerId);
     }
     _playersReady.remove(playerId);
+    state.ensurePlayer(playerId);
 
     if (!isHost) {
       _broadcastTurnInfo();
@@ -344,6 +321,7 @@ class MultiplayerGame extends EnergyGame {
     for (var i = 0; i < _playerOrder.length; i++) {
       final playerId = _playerOrder[i];
       _ensureColorForPlayer(playerId, i);
+      state.ensurePlayer(playerId);
       if (playerHasAnyCell(playerId)) {
         continue;
       }

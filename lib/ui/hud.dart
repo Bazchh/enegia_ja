@@ -48,6 +48,7 @@ class _HUDState extends State<HUD> {
     final game = widget.game;
     final multiplayer = game is MultiplayerGame ? game : null;
     final state = game.state;
+    final playerState = game.localPlayerState;
 
     final canAct = multiplayer == null || multiplayer.canAct;
     final hasEndedTurn = multiplayer?.hasEndedTurn ?? false;
@@ -64,7 +65,7 @@ class _HUDState extends State<HUD> {
                   state: state,
                   game: game,
                   multiplayer: multiplayer,
-                  onShowStats: () => _showStatsSheet(state),
+                  onShowStats: () => _showStatsSheet(playerState),
                 ),
                 if (multiplayer != null)
                   Padding(
@@ -77,6 +78,17 @@ class _HUDState extends State<HUD> {
                           ?.copyWith(color: Colors.white),
                     ),
                   ),
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: Text(
+                    'Orcamento: ${playerState.orcamento.toStringAsFixed(1)} créditos',
+                    style: Theme.of(context)
+                        .textTheme
+                        .labelMedium
+                        ?.copyWith(color: Colors.white),
+                  ),
+                ),
                 const Spacer(),
                 if (multiplayer != null)
                   Padding(
@@ -136,7 +148,9 @@ class _HUDState extends State<HUD> {
     );
   }
 
-  void _showStatsSheet(GameState state) {
+  void _showStatsSheet(PlayerState playerState) {
+    final turn = widget.game.state.turno;
+    final metrics = playerState.metrics;
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -146,32 +160,32 @@ class _HUDState extends State<HUD> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _statRow('Turno', '${state.turno} / 20'),
-              _statRow('Orcamento', state.orcamento.toStringAsFixed(1)),
+              _statRow('Turno', '$turn / 20'),
+              _statRow('Orcamento', playerState.orcamento.toStringAsFixed(1)),
               _statRow(
                 'Acesso',
-                '${(state.metrics.acessoEnergia * 100).toInt()}%',
+                '${(metrics.acessoEnergia * 100).toInt()}%',
               ),
               _statRow(
                 'Energia limpa',
-                '${(state.metrics.limpa * 100).toInt()}%',
+                '${(metrics.limpa * 100).toInt()}%',
               ),
-              _statRow('Tarifa', state.metrics.tarifa.toStringAsFixed(2)),
+              _statRow('Tarifa', metrics.tarifa.toStringAsFixed(2)),
               _statRow(
                 'Saude',
-                '${(state.metrics.saude * 100).toInt()}%',
+                '${(metrics.saude * 100).toInt()}%',
               ),
               _statRow(
                 'Educacao',
-                '${(state.metrics.educacao * 100).toInt()}%',
+                '${(metrics.educacao * 100).toInt()}%',
               ),
               _statRow(
                 'Desigualdade',
-                '${(state.metrics.desigualdade * 100).toInt()}%',
+                '${(metrics.desigualdade * 100).toInt()}%',
               ),
               _statRow(
                 'Clima',
-                '${(state.metrics.clima * 100).toInt()}%',
+                '${(metrics.clima * 100).toInt()}%',
               ),
             ],
           ),
@@ -371,7 +385,7 @@ class _BuildPalette extends StatelessWidget {
     required String tooltip,
   }) {
     final cost = game.costOf(building);
-    final affordable = game.state.orcamento >= cost;
+    final affordable = game.localPlayerState.orcamento >= cost;
     final selected = game.selecionado == building && !game.removeMode;
 
     void handleTap() {
