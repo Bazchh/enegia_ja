@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+
 import '../game/energy_game.dart';
 import '../game/state/game_state.dart';
 import '../multiplayer/multiplayer_game.dart';
 
 class HUD extends StatefulWidget {
-  final EnergyGame game;
   const HUD({super.key, required this.game});
+
+  final EnergyGame game;
+
   @override
   State<HUD> createState() => _HUDState();
 }
@@ -14,22 +17,20 @@ class _HUDState extends State<HUD> {
   @override
   void initState() {
     super.initState();
-    _tick();
+    _listenForBudgetWarnings();
   }
 
-  void _tick() async {
+  void _listenForBudgetWarnings() async {
     while (mounted) {
       await Future.delayed(const Duration(milliseconds: 150));
       if (!mounted) break;
 
-      // snackbar rápido quando faltar orçamento
-      final res = widget.game.lastPlaceResult;
-      if (res == PlaceResult.semOrcamento) {
+      if (widget.game.lastPlaceResult == PlaceResult.semOrcamento) {
         widget.game.lastPlaceResult = null;
-        if (mounted && context.mounted) {
+        if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Orçamento insuficiente'),
+              content: Text('Orcamento insuficiente'),
               backgroundColor: Colors.redAccent,
               behavior: SnackBarBehavior.floating,
               duration: Duration(seconds: 2),
@@ -44,237 +45,471 @@ class _HUDState extends State<HUD> {
 
   @override
   Widget build(BuildContext context) {
-    final s = widget.game.state;
+    final game = widget.game;
+    final multiplayer = game is MultiplayerGame ? game : null;
+    final state = game.state;
+
+    final canAct = multiplayer == null || multiplayer.canAct;
+    final hasEndedTurn = multiplayer?.hasEndedTurn ?? false;
+
     return IgnorePointer(
       ignoring: false,
       child: SafeArea(
-        child: Column(
+        child: Stack(
           children: [
-            _topBar(s),
-            const Spacer(),
-            if (s.acabou()) _resultBar(s) else _buildBar(s),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _topBar(GameState s) {
-    text(String t) => Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          child: Text(t),
-        );
-    return Card(
-      margin: const EdgeInsets.all(8),
-      child: Padding(
-        padding: const EdgeInsets.all(6),
-        child: Wrap(
-          alignment: WrapAlignment.start,
-          spacing: 12,
-          runSpacing: 6,
-          children: [
-            text("Turno: ${s.turno} / 20"),
-            text("Orçamento: ${s.orcamento.toStringAsFixed(1)}"),
-            text("Acesso: ${(s.metrics.acessoEnergia * 100).toInt()}%"),
-            text("Limpa: ${(s.metrics.limpa * 100).toInt()}%"),
-            text("Tarifa: ${s.metrics.tarifa.toStringAsFixed(2)}"),
-            text("Saúde: ${(s.metrics.saude * 100).toInt()}%"),
-            text("Educação: ${(s.metrics.educacao * 100).toInt()}%"),
-            text("Melhor Limpa: ${(widget.game.bestClean * 100).toInt()}%"),
-            text(
-                "Melhor Turno: ${widget.game.bestTurn == 999 ? '-' : widget.game.bestTurn}"),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBar(GameState s) {
-    final g = widget.game;
-    final multiplayer = g is MultiplayerGame ? g : null;
-    final canAct = multiplayer == null || multiplayer.isLocalTurn;
-    final statusLabel = multiplayer == null
-        ? null
-        : (canAct ? 'Sua vez' : 'Aguardando o outro jogador');
-
-    // Agora com tooltip e animação de seleção + disabled quando não cabe no orçamento
-    Widget btnBuild(String label, Building b, String asset, String tooltip) {
-      final cost = g.costOf(b);
-      final affordable = s.orcamento >= cost;
-      final selected = g.selecionado == b && !g.removeMode;
-
-      final buttonChild = Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Image.asset(asset, width: 20, height: 20),
-          const SizedBox(width: 8),
-          Text(label),
-          const SizedBox(width: 6),
-          Text(
-            "(${cost.toStringAsFixed(0)})",
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              color: affordable ? Colors.white70 : Colors.redAccent,
-            ),
-          ),
-        ],
-      );
-
-      final onTap = () => setState(() {
-            g.removeMode = false; // ao escolher construir, sai do modo remover
-            g.selecionado = b;
-          });
-
-      final button = selected
-          ? FilledButton(
-              onPressed: affordable && canAct ? onTap : null,
-              child: buttonChild,
-            )
-          : FilledButton.tonal(
-              onPressed: affordable && canAct ? onTap : null,
-              child: buttonChild,
-            );
-
-      return Padding(
-        padding: const EdgeInsets.only(right: 12),
-        child: Tooltip(
-          message: '$tooltip\nCusto: ${cost.toStringAsFixed(1)}',
-          waitDuration: const Duration(milliseconds: 250),
-          child: AnimatedScale(
-            duration: const Duration(milliseconds: 180),
-            scale: selected ? 1.05 : 1.0,
-            curve: Curves.easeOut,
-            child: button,
-          ),
-        ),
-      );
-    }
-
-    // BOTÃO REMOVER (toggle) com tooltip e animação
-    Widget btnRemove() {
-      final active = g.removeMode;
-      final icon = Icon(Icons.delete, color: active ? Colors.white : null);
-      final label = Text('Remover',
-          style: TextStyle(color: active ? Colors.white : null));
-
-      final child = Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          icon,
-          const SizedBox(width: 8),
-          label,
-        ],
-      );
-
-      final button = active
-          ? FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: Colors.red),
-              onPressed: canAct ? () => setState(() => g.removeMode = false) : null,
-              child: child,
-            )
-          : FilledButton.tonal(
-              onPressed: canAct ? () => setState(() => g.removeMode = true) : null,
-              child: child,
-            );
-
-      return Padding(
-        padding: const EdgeInsets.only(right: 12),
-        child: Tooltip(
-          message: 'Alterna para remover construções e recuperar 50% do custo',
-          waitDuration: const Duration(milliseconds: 250),
-          child: AnimatedScale(
-            duration: const Duration(milliseconds: 180),
-            scale: active ? 1.05 : 1.0,
-            curve: Curves.easeOut,
-            child: button,
-          ),
-        ),
-      );
-    }
-
-    // caminhos completos para Image.asset (ajustado p/ assets/images/icons)
-    return Card(
-      margin: const EdgeInsets.all(8),
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: SizedBox(
-          height: 56,
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                btnBuild(
-                  "Solar",
-                  Building.solar,
-                  'assets/images/icons/icon_solar.png',
-                  'Gera energia limpa constante',
+                _Header(
+                  state: state,
+                  game: game,
+                  multiplayer: multiplayer,
+                  onShowStats: () => _showStatsSheet(state),
                 ),
-                btnBuild(
-                  "Eólica",
-                  Building.eolica,
-                  'assets/images/icons/icon_wind.png',
-                  'Energia limpa com tarifa levemente menor',
-                ),
-                btnBuild(
-                  "Eficiência",
-                  Building.eficiencia,
-                  'assets/images/icons/icon_efficiency.png',
-                  'Reduz tarifas e melhora educação',
-                ),
-                btnBuild(
-                  "Saneamento",
-                  Building.saneamento,
-                  'assets/images/icons/icon_sanitation.png',
-                  'Melhora saúde e reduz desigualdade',
-                ),
-                const SizedBox(width: 8),
-                btnRemove(),
-                const SizedBox(width: 16),
-                FilledButton(
-                  onPressed: canAct
-                      ? () => setState(() => widget.game.endTurn())
-                      : null,
-                  child: const Text('Avancar turno'),
-                ),
-                if (statusLabel != null) ...[
-                  const SizedBox(width: 16),
-                  Text(
-                    statusLabel,
-                    style: Theme.of(context).textTheme.bodySmall,
+                if (multiplayer != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Text(
+                      'Turno ${state.turno} - Prontos ${multiplayer.readiness.values.where((r) => r).length}/${multiplayer.readiness.length}',
+                      style: Theme.of(context)
+                          .textTheme
+                          .labelMedium
+                          ?.copyWith(color: Colors.white),
+                    ),
                   ),
-                ],
+                const Spacer(),
+                if (multiplayer != null)
+                  Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Text(
+                      hasEndedTurn
+                          ? 'Aguardando outros jogadores...'
+                          : 'Seu turno esta ativo',
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: Colors.white),
+                    ),
+                  ),
+                _BuildPalette(
+                  game: game,
+                  canAct: canAct,
+                  onChanged: () => setState(() {}),
+                ),
+                const SizedBox(height: 96),
               ],
             ),
+            Positioned(
+              right: 16,
+              bottom: 16,
+              child: FloatingActionButton(
+                heroTag: 'end-turn',
+                tooltip: hasEndedTurn
+                    ? 'Aguardando outros jogadores'
+                    : 'Encerrar turno',
+                backgroundColor: hasEndedTurn
+                    ? Theme.of(context).disabledColor
+                    : Theme.of(context).colorScheme.primary,
+                onPressed: canAct ? () => setState(() => game.endTurn()) : null,
+                child: Icon(
+                  hasEndedTurn ? Icons.hourglass_empty : Icons.check,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+            if (state.acabou())
+              Align(
+                alignment: Alignment.bottomCenter,
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  child: _ResultBar(
+                    state: state,
+                    onRestart: () => setState(() => game.restart()),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showStatsSheet(GameState state) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _statRow('Turno', '${state.turno} / 20'),
+              _statRow('Orcamento', state.orcamento.toStringAsFixed(1)),
+              _statRow(
+                'Acesso',
+                '${(state.metrics.acessoEnergia * 100).toInt()}%',
+              ),
+              _statRow(
+                'Energia limpa',
+                '${(state.metrics.limpa * 100).toInt()}%',
+              ),
+              _statRow('Tarifa', state.metrics.tarifa.toStringAsFixed(2)),
+              _statRow(
+                'Saude',
+                '${(state.metrics.saude * 100).toInt()}%',
+              ),
+              _statRow(
+                'Educacao',
+                '${(state.metrics.educacao * 100).toInt()}%',
+              ),
+              _statRow(
+                'Desigualdade',
+                '${(state.metrics.desigualdade * 100).toInt()}%',
+              ),
+              _statRow(
+                'Clima',
+                '${(state.metrics.clima * 100).toInt()}%',
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _statRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+          Text(value),
+        ],
+      ),
+    );
+  }
+}
+
+class _Header extends StatelessWidget {
+  const _Header({
+    required this.state,
+    required this.game,
+    required this.multiplayer,
+    required this.onShowStats,
+  });
+
+  final GameState state;
+  final EnergyGame game;
+  final MultiplayerGame? multiplayer;
+  final VoidCallback onShowStats;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: multiplayer == null
+                ? Text(
+                    'Turno ${state.turno} / 20',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(color: Colors.white),
+                  )
+                : _TurnIndicators(
+                    multiplayer: multiplayer!,
+                    game: game,
+                  ),
+          ),
+          IconButton(
+            tooltip: 'Estatisticas',
+            onPressed: onShowStats,
+            icon: const Icon(
+              Icons.bar_chart,
+              color: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TurnIndicators extends StatelessWidget {
+  const _TurnIndicators({
+    required this.multiplayer,
+    required this.game,
+  });
+
+  final MultiplayerGame multiplayer;
+  final EnergyGame game;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final playerIds = multiplayer.players;
+    if (playerIds.isEmpty) {
+      return Text(
+        'Turno ${multiplayer.state.turno} / 20',
+        style: theme.textTheme.titleMedium?.copyWith(color: Colors.white),
+      );
+    }
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: playerIds.map((playerId) {
+          final ready = multiplayer.readiness[playerId] ?? false;
+          final isLocal = playerId == multiplayer.socket.playerId;
+          final label =
+              isLocal ? 'Voce' : playerId.substring(0, 4).toUpperCase();
+          final border = multiplayer.borderColorForOwner(playerId);
+          final background = ready
+              ? border.withAlpha((0.28 * 255).round())
+              : border.withAlpha((0.75 * 255).round());
+          final icon = ready ? Icons.check : Icons.flash_on;
+
+          return Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircleAvatar(
+                  radius: 20,
+                  backgroundColor: background,
+                  foregroundColor: Colors.white,
+                  child: Icon(icon, size: 20),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  label,
+                  style:
+                      theme.textTheme.labelSmall?.copyWith(color: Colors.white),
+                ),
+              ],
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+class _BuildPalette extends StatelessWidget {
+  const _BuildPalette({
+    required this.game,
+    required this.canAct,
+    required this.onChanged,
+  });
+
+  final EnergyGame game;
+  final bool canAct;
+  final VoidCallback onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.all(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              _buildButton(
+                context,
+                label: 'Solar',
+                building: Building.solar,
+                asset: 'assets/images/icons/icon_solar.png',
+                tooltip: 'Gera energia limpa constante',
+              ),
+              _buildButton(
+                context,
+                label: 'Eolica',
+                building: Building.eolica,
+                asset: 'assets/images/icons/icon_wind.png',
+                tooltip: 'Energia limpa com tarifa menor',
+              ),
+              _buildButton(
+                context,
+                label: 'Eficiencia',
+                building: Building.eficiencia,
+                asset: 'assets/images/icons/icon_efficiency.png',
+                tooltip: 'Reduz tarifas e melhora educacao',
+              ),
+              _buildButton(
+                context,
+                label: 'Saneamento',
+                building: Building.saneamento,
+                asset: 'assets/images/icons/icon_sanitation.png',
+                tooltip: 'Melhora saude e reduz desigualdade',
+              ),
+              const SizedBox(width: 12),
+              _removalButton(context),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _resultBar(GameState s) {
-    final venceu = s.venceu();
-    final title = venceu ? "Vitória sustentável!" : "Objetivos não alcançados";
-    final color = venceu ? Colors.green : Colors.red;
+  Widget _buildButton(
+    BuildContext context, {
+    required String label,
+    required Building building,
+    required String asset,
+    required String tooltip,
+  }) {
+    final cost = game.costOf(building);
+    final affordable = game.state.orcamento >= cost;
+    final selected = game.selecionado == building && !game.removeMode;
+
+    void handleTap() {
+      game.removeMode = false;
+      game.selecionado = building;
+      onChanged();
+    }
+
+    final buttonChild = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Image.asset(asset, width: 20, height: 20),
+        const SizedBox(width: 8),
+        Text(label),
+        const SizedBox(width: 6),
+        Text(
+          '(${cost.toStringAsFixed(0)})',
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            color: affordable ? Colors.white70 : Colors.redAccent,
+          ),
+        ),
+      ],
+    );
+
+    final button = selected
+        ? FilledButton(
+            onPressed: affordable && canAct ? handleTap : null,
+            child: buttonChild,
+          )
+        : FilledButton.tonal(
+            onPressed: affordable && canAct ? handleTap : null,
+            child: buttonChild,
+          );
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 12),
+      child: Tooltip(
+        message: '$tooltip\nCusto: ${cost.toStringAsFixed(1)}',
+        waitDuration: const Duration(milliseconds: 250),
+        child: AnimatedScale(
+          duration: const Duration(milliseconds: 180),
+          scale: selected ? 1.05 : 1.0,
+          curve: Curves.easeOut,
+          child: button,
+        ),
+      ),
+    );
+  }
+
+  Widget _removalButton(BuildContext context) {
+    final active = game.removeMode;
+    final icon = Icon(Icons.delete, color: active ? Colors.white : null);
+    final label = Text(
+      'Remover',
+      style: TextStyle(color: active ? Colors.white : null),
+    );
+
+    final child = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        icon,
+        const SizedBox(width: 8),
+        label,
+      ],
+    );
+
+    final button = active
+        ? FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: canAct
+                ? () {
+                    game.removeMode = false;
+                    onChanged();
+                  }
+                : null,
+            child: child,
+          )
+        : FilledButton.tonal(
+            onPressed: canAct
+                ? () {
+                    game.removeMode = true;
+                    onChanged();
+                  }
+                : null,
+            child: child,
+          );
+
+    return Tooltip(
+      message:
+          'Alterna para remover construcoes e recuperar 50% do custo',
+      waitDuration: const Duration(milliseconds: 250),
+      child: AnimatedScale(
+        duration: const Duration(milliseconds: 180),
+        scale: active ? 1.05 : 1.0,
+        curve: Curves.easeOut,
+        child: button,
+      ),
+    );
+  }
+}
+
+class _ResultBar extends StatelessWidget {
+  const _ResultBar({
+    required this.state,
+    required this.onRestart,
+  });
+
+  final GameState state;
+  final VoidCallback onRestart;
+
+  @override
+  Widget build(BuildContext context) {
+    final won = state.venceu();
+    final color = won ? Colors.green : Colors.red;
+    final title = won ? 'Vitoria sustentavel!' : 'Objetivos nao alcancados';
 
     return Card(
-      margin: const EdgeInsets.all(8),
-      color: color.withOpacity(0.12),
+      color: color.withAlpha((0.12 * 255).round()),
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Row(
           children: [
-            Icon(venceu ? Icons.check_circle : Icons.cancel, color: color),
+            Icon(won ? Icons.check_circle : Icons.cancel, color: color),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
                 title,
-                style: TextStyle(color: color, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  color: color,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
             FilledButton(
-              onPressed: () => setState(() => widget.game.restart()),
-              child: const Text("Reiniciar"),
-            )
+              onPressed: onRestart,
+              child: const Text('Reiniciar'),
+            ),
           ],
         ),
       ),

@@ -1,74 +1,86 @@
 import 'package:flame/components.dart';
 import 'package:flame/events.dart';
 import 'package:flutter/painting.dart';
+
 import '../energy_game.dart';
 import '../state/game_state.dart';
 
-class Cell extends PositionComponent with TapCallbacks, HasGameRef<EnergyGame> {
+class Cell extends PositionComponent
+    with TapCallbacks, HasGameReference<EnergyGame> {
   final int cx, cy;
 
   Cell(this.cx, this.cy);
 
   @override
   Future<void> onLoad() async {
-    size = Vector2.all(gameRef.tileSize);
-    position = Vector2(cx * gameRef.tileSize, cy * gameRef.tileSize);
+    size = Vector2.all(game.tileSize);
+    position = Vector2(cx * game.tileSize, cy * game.tileSize);
   }
 
   @override
-  void render(Canvas c) {
-    final model = gameRef.state.grid[cx][cy];
+  void render(Canvas canvas) {
+    final model = game.state.grid[cx][cy];
+    final ownerColor = game.colorForOwner(model.ownerId);
+    final isLocalOwner = model.ownerId == game.localPlayerId;
+    final backgroundOpacity = model.b == Building.vazio ? 0.26 : 0.55;
+    final background =
+        ownerColor.withAlpha((backgroundOpacity * 255).round());
 
-    // fundo
-    c.drawRect(
+    // base fill tinted by territory
+    canvas.drawRect(
       size.toRect(),
-      Paint()..color = model.powered ? const Color(0xFFFFD54F) : const Color(0xFF424242),
+      Paint()..color = background,
     );
 
-    // ícone (se houver construção)
-    final b = model.b;
-    if (b != Building.vazio) {
-      final sprite = gameRef.sprites[b]!;
+    // building sprite, if any
+    final building = model.b;
+    if (building != Building.vazio) {
+      final sprite = game.sprites[building]!;
       final rect = size.toRect().deflate(size.x * 0.18);
-      sprite.renderRect(c, rect);
+      sprite.renderRect(canvas, rect);
     }
 
-    // borda padrão
-    c.drawRect(
+    // owner border; local player gets stronger accent
+    final ownerBorder = game.borderColorForOwner(model.ownerId);
+    final borderColor = isLocalOwner
+        ? ownerBorder
+        : ownerBorder.withAlpha((0.75 * 255).round());
+    canvas.drawRect(
       size.toRect().deflate(1),
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.2
-        ..color = const Color(0xFF616161),
+        ..color = borderColor,
     );
 
-    // ===== Preview =====
-    if (!gameRef.removeMode) {
-      // construir: célula vazia → contorno verde se pode pagar, vermelho se não.
+    // ===== Preview overlays =====
+    if (!game.removeMode) {
+      // Build: outline green/red depending on budget
       if (model.b == Building.vazio) {
-        final selected = gameRef.selecionado ?? Building.solar;
-        final canAfford = gameRef.state.orcamento >= gameRef.costOf(selected);
-        c.drawRect(
+        final selected = game.selecionado ?? Building.solar;
+        final canAfford = game.state.orcamento >= game.costOf(selected);
+        canvas.drawRect(
           size.toRect().deflate(2),
           Paint()
             ..style = PaintingStyle.stroke
             ..strokeWidth = 2.0
-            ..color = canAfford ? const Color(0xFF66BB6A) : const Color(0xFFE57373),
+            ..color =
+                canAfford ? const Color(0xFF66BB6A) : const Color(0xFFE57373),
         );
       }
     } else {
-      // remover: célula ocupada → overlay vermelho suave
+      // Removal: red stroke and translucent fill
       if (model.b != Building.vazio) {
-        c.drawRect(
+        canvas.drawRect(
           size.toRect().deflate(2),
           Paint()
             ..style = PaintingStyle.stroke
             ..strokeWidth = 2.0
             ..color = const Color(0xFFE53935),
         );
-        c.drawRect(
+        canvas.drawRect(
           size.toRect(),
-          Paint()..color = const Color(0x80E53935), // overlay semi-transparente
+          Paint()..color = const Color(0x80E53935),
         );
       }
     }
@@ -76,8 +88,8 @@ class Cell extends PositionComponent with TapCallbacks, HasGameRef<EnergyGame> {
 
   @override
   void onTapDown(TapDownEvent event) {
-    final res = gameRef.placeAt(cx, cy);
-    gameRef.lastPlaceResult = res;
+    final res = game.placeAt(cx, cy);
+    game.lastPlaceResult = res;
     super.onTapDown(event);
   }
 }

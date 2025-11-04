@@ -35,8 +35,13 @@ class Metrics {
 class CellModel {
   Building b;
   bool powered;
+  String? ownerId;
 
-  CellModel({this.b = Building.vazio, this.powered = false});
+  CellModel({
+    this.b = Building.vazio,
+    this.powered = false,
+    this.ownerId,
+  });
 
   factory CellModel.fromJson(Map<String, dynamic> json) => CellModel(
         b: Building.values.firstWhere(
@@ -44,11 +49,13 @@ class CellModel {
           orElse: () => Building.vazio,
         ),
         powered: json['powered'] ?? false,
+        ownerId: json['ownerId']?.toString(),
       );
 
   Map<String, dynamic> toJson() => {
         'b': b.name,
         'powered': powered,
+        if (ownerId != null) 'ownerId': ownerId,
       };
 }
 

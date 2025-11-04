@@ -15,6 +15,7 @@ class EnergyGame extends FlameGame {
   EnergyGame() {
     state = GameState(size: 10);
     selecionado = Building.solar;
+    setLocalPlayer('solo');
   }
 
   late GameState state;
@@ -23,6 +24,9 @@ class EnergyGame extends FlameGame {
   PlaceResult? lastPlaceResult;
 
   bool removeMode = false;
+
+  String _localPlayerId = 'solo';
+  final Map<String, Color> _ownerColors = {};
 
   double tileSize = 64.0;
   double reservedTop = 120;
@@ -51,6 +55,37 @@ class EnergyGame extends FlameGame {
 
   @override
   Color backgroundColor() => const Color(0xFF212121);
+
+  String get localPlayerId => _localPlayerId;
+
+  void setLocalPlayer(String playerId) {
+    _localPlayerId = playerId;
+    _ownerColors.putIfAbsent(
+      playerId,
+      () => Colors.lightBlueAccent,
+    );
+  }
+
+  void setOwnerColor(String ownerId, Color color) {
+    _ownerColors[ownerId] = color;
+  }
+
+  bool hasOwnerColor(String ownerId) => _ownerColors.containsKey(ownerId);
+
+  Color colorForOwner(String? ownerId) {
+    if (ownerId == null) {
+      return const Color(0xFF424242);
+    }
+    final base = _ownerColors[ownerId] ?? Colors.grey.shade600;
+    return Color.lerp(base, Colors.white, 0.35) ?? base;
+  }
+
+  Color borderColorForOwner(String? ownerId) {
+    if (ownerId == null) {
+      return const Color(0xFF616161);
+    }
+    return _ownerColors[ownerId] ?? Colors.grey.shade600;
+  }
 
   @override
   Future<void> onLoad() async {
@@ -88,8 +123,8 @@ class EnergyGame extends FlameGame {
   }
 
   @override
-  void onGameResize(Vector2 canvasSize) {
-    super.onGameResize(canvasSize);
+  void onGameResize(Vector2 size) {
+    super.onGameResize(size);
     _recomputeLayout();
     _applyLayoutToCells();
   }
@@ -130,7 +165,9 @@ class EnergyGame extends FlameGame {
     saveGame();
   }
 
-  PlaceResult placeAt(int x, int y) {
+  PlaceResult placeAt(int x, int y, {String? actingPlayerId}) {
+    final playerId = actingPlayerId ?? _localPlayerId;
+
     if (_outOfBounds(x, y) || state.acabou()) {
       return lastPlaceResult = PlaceResult.invalido;
     }
@@ -138,6 +175,11 @@ class EnergyGame extends FlameGame {
     final cell = state.grid[x][y];
 
     if (removeMode) {
+      if ((cell.ownerId != null && cell.ownerId != playerId) ||
+          cell.b == Building.vazio) {
+        return lastPlaceResult = PlaceResult.invalido;
+      }
+
       if (cell.b == Building.vazio) {
         return lastPlaceResult = PlaceResult.invalido;
       }
@@ -157,6 +199,10 @@ class EnergyGame extends FlameGame {
       return lastPlaceResult = PlaceResult.invalido;
     }
 
+    if (!canControlCell(playerId, x, y)) {
+      return lastPlaceResult = PlaceResult.invalido;
+    }
+
     final custo = costOf(building);
     if (state.orcamento < custo) {
       return lastPlaceResult = PlaceResult.semOrcamento;
@@ -165,7 +211,8 @@ class EnergyGame extends FlameGame {
     state.orcamento -= custo;
     cell
       ..b = building
-      ..powered = true;
+      ..powered = true
+      ..ownerId = playerId;
     lastPlaceResult = PlaceResult.ok;
 
     _recomputeMetrics();
@@ -259,6 +306,54 @@ class EnergyGame extends FlameGame {
 
   bool _outOfBounds(int x, int y) =>
       x < 0 || y < 0 || x >= state.size || y >= state.size;
+
+  bool playerHasAnyCell(String playerId) {
+    for (var x = 0; x < state.size; x++) {
+      for (var y = 0; y < state.size; y++) {
+        if (state.grid[x][y].ownerId == playerId) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  @protected
+  bool canControlCell(String playerId, int x, int y) {
+    final cell = state.grid[x][y];
+    if (cell.ownerId != null && cell.ownerId != playerId) {
+      return false;
+    }
+
+    if (cell.ownerId == playerId) {
+      return true;
+    }
+
+    if (!playerHasAnyCell(playerId)) {
+      return true;
+    }
+
+    return _hasAdjacentOwnedCell(playerId, x, y);
+  }
+
+  bool _hasAdjacentOwnedCell(String playerId, int x, int y) {
+    const dirs = [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ];
+
+    for (final dir in dirs) {
+      final nx = x + dir[0];
+      final ny = y + dir[1];
+      if (_outOfBounds(nx, ny)) continue;
+      if (state.grid[nx][ny].ownerId == playerId) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   Future<void> _loadProgress() async {
     final sp = await SharedPreferences.getInstance();

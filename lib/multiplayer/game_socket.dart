@@ -11,6 +11,18 @@ const _defaultWsUrl = String.fromEnvironment(
   defaultValue: 'ws://192.168.1.5:8083',
 );
 
+class TurnUpdateMessage {
+  TurnUpdateMessage({
+    required this.players,
+    required this.readyPlayers,
+    required this.turn,
+  });
+
+  final List<String> players;
+  final List<String> readyPlayers;
+  final int turn;
+}
+
 class GameSocket {
   final String playerId;
   final String roomId;
@@ -23,7 +35,7 @@ class GameSocket {
   Function(String)? onPlayerLeft;
   Function(String)? onError;
   Function(String, Map<String, dynamic>)? onActionRequest;
-  Function(String, List<String>)? onTurnUpdate;
+  Function(TurnUpdateMessage)? onTurnUpdate;
 
   // Lobby callbacks
   Function(Map<String, dynamic>)? onLobbyState;
@@ -104,14 +116,19 @@ class GameSocket {
     });
   }
 
-  void sendTurnInfo(String currentId, List<String> players) {
+  void sendTurnInfo({
+    required List<String> players,
+    required List<String> readyPlayers,
+    required int turn,
+  }) {
     if (!isConnected) return;
     _sendMessage({
       'type': 'turn_update',
       'playerId': playerId,
       'roomId': roomId,
-      'currentPlayerId': currentId,
       'players': players,
+      'readyPlayers': readyPlayers,
+      'turn': turn,
     });
   }
 
@@ -222,8 +239,18 @@ class GameSocket {
                     ?.map((e) => e.toString())
                     .toList() ??
                 const <String>[];
-            final currentId = data['currentPlayerId']?.toString() ?? '';
-            onTurnUpdate!(currentId, players);
+            final readyPlayers = (data['readyPlayers'] as List<dynamic>?)
+                    ?.map((e) => e.toString())
+                    .toList() ??
+                const <String>[];
+            final turn = data['turn'] is num ? (data['turn'] as num).toInt() : 1;
+            onTurnUpdate!(
+              TurnUpdateMessage(
+                players: players,
+                readyPlayers: readyPlayers,
+                turn: turn,
+              ),
+            );
           }
           break;
         case 'lobby_state':

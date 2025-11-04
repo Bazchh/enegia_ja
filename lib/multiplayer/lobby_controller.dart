@@ -181,10 +181,14 @@ class LobbyController extends ChangeNotifier {
     _cancelCountdown();
     _detachSocketListeners();
     _handedOffToGame = true;
+    final colors = {
+      for (final entry in playerMap.entries) entry.key: entry.value.color,
+    };
     return MultiplayerGame(
       existingSocket: socket,
       isHost: isHost,
       initialPlayers: playerOrder,
+      playerColors: colors,
     );
   }
 
@@ -298,6 +302,7 @@ class LobbyController extends ChangeNotifier {
       }
       _broadcastLobbyState();
       _evaluateCountdown();
+      notifyListeners();
     }
 
     if (payload.containsKey('color')) {
@@ -305,6 +310,7 @@ class LobbyController extends ChangeNotifier {
       final assigned = _assignColor(playerId, preferred: desired);
       player.color = assigned;
       _broadcastLobbyState();
+      notifyListeners();
     }
   }
 
