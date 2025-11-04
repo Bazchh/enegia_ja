@@ -46,7 +46,8 @@ class Cell extends PositionComponent with TapCallbacks, HasGameRef<EnergyGame> {
     if (!gameRef.removeMode) {
       // construir: célula vazia → contorno verde se pode pagar, vermelho se não.
       if (model.b == Building.vazio) {
-        final canAfford = gameRef.state.orcamento >= gameRef.costOf(gameRef.selecionado);
+        final selected = gameRef.selecionado ?? Building.solar;
+        final canAfford = gameRef.state.orcamento >= gameRef.costOf(selected);
         c.drawRect(
           size.toRect().deflate(2),
           Paint()
@@ -75,13 +76,8 @@ class Cell extends PositionComponent with TapCallbacks, HasGameRef<EnergyGame> {
 
   @override
   void onTapDown(TapDownEvent event) {
-    if (gameRef.removeMode) {
-      final removed = gameRef.removeAt(cx, cy);
-      gameRef.lastPlaceResult = removed ? PlaceResult.ok : PlaceResult.ocupado;
-    } else {
-      final res = gameRef.placeAt(cx, cy);
-      gameRef.lastPlaceResult = res;
-    }
+    final res = gameRef.placeAt(cx, cy);
+    gameRef.lastPlaceResult = res;
     super.onTapDown(event);
-  }
+  }
 }

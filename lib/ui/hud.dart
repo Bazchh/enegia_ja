@@ -86,12 +86,13 @@ class _HUDState extends State<HUD> {
   Widget _buildBar(GameState s) {
     final g = widget.game;
 
-    Widget btnBuild(String label, Building b, String asset) {
+    // Agora com tooltip e animação de seleção + disabled quando não cabe no orçamento
+    Widget btnBuild(String label, Building b, String asset, String tooltip) {
       final cost = g.costOf(b);
       final affordable = s.orcamento >= cost;
       final selected = g.selecionado == b && !g.removeMode;
 
-      final child = Row(
+      final buttonChild = Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Image.asset(asset, width: 20, height: 20),
@@ -113,15 +114,26 @@ class _HUDState extends State<HUD> {
             g.selecionado = b;
           });
 
+      final button = selected
+          ? FilledButton(onPressed: affordable ? onTap : null, child: buttonChild)
+          : FilledButton.tonal(onPressed: affordable ? onTap : null, child: buttonChild);
+
       return Padding(
         padding: const EdgeInsets.only(right: 12),
-        child: selected
-            ? FilledButton(onPressed: onTap, child: child)
-            : FilledButton.tonal(onPressed: onTap, child: child),
+        child: Tooltip(
+          message: '$tooltip\nCusto: ${cost.toStringAsFixed(1)}',
+          waitDuration: const Duration(milliseconds: 250),
+          child: AnimatedScale(
+            duration: const Duration(milliseconds: 180),
+            scale: selected ? 1.05 : 1.0,
+            curve: Curves.easeOut,
+            child: button,
+          ),
+        ),
       );
     }
 
-    // BOTÃO REMOVER (toggle)
+    // BOTÃO REMOVER (toggle) com tooltip e animação
     Widget btnRemove() {
       final active = g.removeMode;
       final icon = Icon(Icons.delete, color: active ? Colors.white : null);
@@ -137,22 +149,33 @@ class _HUDState extends State<HUD> {
         ],
       );
 
+      final button = active
+          ? FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () => setState(() => g.removeMode = false),
+              child: child,
+            )
+          : FilledButton.tonal(
+              onPressed: () => setState(() => g.removeMode = true),
+              child: child,
+            );
+
       return Padding(
         padding: const EdgeInsets.only(right: 12),
-        child: active
-            ? FilledButton(
-                style: FilledButton.styleFrom(backgroundColor: Colors.red),
-                onPressed: () => setState(() => g.removeMode = false),
-                child: child,
-              )
-            : FilledButton.tonal(
-                onPressed: () => setState(() => g.removeMode = true),
-                child: child,
-              ),
+        child: Tooltip(
+          message: 'Alterna para remover construções e recuperar 50% do custo',
+          waitDuration: const Duration(milliseconds: 250),
+          child: AnimatedScale(
+            duration: const Duration(milliseconds: 180),
+            scale: active ? 1.05 : 1.0,
+            curve: Curves.easeOut,
+            child: button,
+          ),
+        ),
       );
     }
 
-    // caminhos completos para Image.asset (Flutter usa prefixo assets/)
+    // caminhos completos para Image.asset (ajustado p/ assets/images/icons)
     return Card(
       margin: const EdgeInsets.all(8),
       child: Padding(
@@ -163,16 +186,37 @@ class _HUDState extends State<HUD> {
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                btnBuild("Solar", Building.solar,
-                    'assets/icons/icon_solar.png'),
-                btnBuild("Eólica", Building.eolica,
-                    'assets/icons/icon_wind.png'),
-                btnBuild("Eficiência", Building.eficiencia,
-                    'assets/icons/icon_efficiency.png'),
-                btnBuild("Saneamento", Building.saneamento,
-                    'assets/icons/icon_sanitation.png'),
+                btnBuild(
+                  "Solar",
+                  Building.solar,
+                  'assets/images/icons/icon_solar.png',
+                  'Gera energia limpa constante',
+                ),
+                btnBuild(
+                  "Eólica",
+                  Building.eolica,
+                  'assets/images/icons/icon_wind.png',
+                  'Energia limpa com tarifa levemente menor',
+                ),
+                btnBuild(
+                  "Eficiência",
+                  Building.eficiencia,
+                  'assets/images/icons/icon_efficiency.png',
+                  'Reduz tarifas e melhora educação',
+                ),
+                btnBuild(
+                  "Saneamento",
+                  Building.saneamento,
+                  'assets/images/icons/icon_sanitation.png',
+                  'Melhora saúde e reduz desigualdade',
+                ),
                 const SizedBox(width: 8),
                 btnRemove(),
+                const SizedBox(width: 16),
+                FilledButton(
+                  onPressed: () => setState(() => widget.game.endTurn()),
+                  child: const Text('Avançar turno'),
+                ),
               ],
             ),
           ),
