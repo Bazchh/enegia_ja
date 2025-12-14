@@ -26,6 +26,13 @@ class _MultiplayerMenuState extends State<MultiplayerMenu> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
+              Image.asset(
+                'assets/images/logo.png',
+                width: 150,
+                height: 150,
+                fit: BoxFit.contain,
+              ),
+              const SizedBox(height: 20),
               const Text(
                 'Modo Multiplayer',
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),

@@ -86,19 +86,74 @@ class _LobbyScreenState extends State<LobbyScreen> {
             icon: const Icon(Icons.copy),
           ),
         ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(32),
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Text(
-              'Sala: ${_controller.roomId}',
-              style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onPrimary),
-            ),
-          ),
-        ),
       ),
       body: SafeArea(
-        child: AnimatedPadding(
+        child: Column(
+          children: [
+            // Card destacado com o código da sala
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: theme.colorScheme.primary,
+                  width: 2,
+                ),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    'CÓDIGO DA SALA',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onPrimaryContainer,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        _controller.roomId,
+                        style: theme.textTheme.headlineMedium?.copyWith(
+                          color: theme.colorScheme.primary,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 2,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      IconButton(
+                        icon: const Icon(Icons.copy),
+                        onPressed: () {
+                          Clipboard.setData(ClipboardData(text: _controller.roomId));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Código copiado!'),
+                              duration: Duration(seconds: 1),
+                            ),
+                          );
+                        },
+                        tooltip: 'Copiar código',
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: _buildLobbyContent(theme, error, countdown),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLobbyContent(ThemeData theme, String? error, int? countdown) {
+    return AnimatedPadding(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOut,
           padding: const EdgeInsets.all(16),
@@ -167,8 +222,6 @@ class _LobbyScreenState extends State<LobbyScreen> {
               _buildReadyRow(theme),
             ],
           ),
-        ),
-      ),
     );
   }
 

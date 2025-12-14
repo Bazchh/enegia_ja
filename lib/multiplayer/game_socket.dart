@@ -8,7 +8,7 @@ import '../game/state/game_state.dart';
 
 const _defaultWsUrl = String.fromEnvironment(
   'WS_URL',
-  defaultValue: 'wss://enegiaja-production.up.railway.app',
+  defaultValue: 'wss://enegia-ja.onrender.com',
 );
 
 class TurnUpdateMessage {

@@ -159,7 +159,7 @@ Este roteiro lista os principais marcos do projeto Energia Já e os prompts espe
 >
 > **Commit:** `test(core): add unit tests for placement and metric logic`
 
-## Fase 13 – Sistema de Territórios e Propriedade de Células (Nova)
+## Fase 13 – Sistema de Territórios e Propriedade de Células (Concluída)
 **Objetivo:** Separar o grid por jogador, atribuindo propriedade às células e limitando construções por território.  
 **Arquivos:** `lib/game/state/game_state.dart`, `lib/game/components/cell.dart`, `lib/game/energy_game.dart`, `lib/ui/hud.dart`
 
@@ -176,7 +176,7 @@ Este roteiro lista os principais marcos do projeto Energia Já e os prompts espe
 
 ---
 
-## Fase 14 – Expansão Territorial e Influência (Nova)
+## Fase 14 – Expansão Territorial e Influência (Parcial)
 **Objetivo:** Permitir expansão do território e disputa por influência.  
 **Arquivos:** `lib/game/energy_game.dart`, `lib/game/state/game_state.dart`, `lib/game/components/cell.dart`
 
@@ -192,7 +192,7 @@ Este roteiro lista os principais marcos do projeto Energia Já e os prompts espe
 
 ---
 
-## Fase 15 – Sistema Econômico e Comércio entre Jogadores (Nova)
+## Fase 15 – Sistema Econômico e Comércio entre Jogadores (Pendente)
 **Objetivo:** Adicionar economia simples e possibilidade de troca entre jogadores.  
 **Arquivos:** `lib/game/state/game_state.dart`, `lib/game/energy_game.dart`, `lib/ui/hud.dart`
 
@@ -210,7 +210,7 @@ Este roteiro lista os principais marcos do projeto Energia Já e os prompts espe
 
 ---
 
-## Fase 16 – Clima Global e Eventos Dinâmicos (Nova)
+## Fase 16 – Clima Global e Eventos Dinâmicos (Pendente)
 **Objetivo:** Criar uma camada global de simulação climática e eventos.  
 **Arquivos:** `lib/game/world_state.dart`, `lib/game/energy_game.dart`, `lib/ui/hud.dart`
 
@@ -225,7 +225,7 @@ Este roteiro lista os principais marcos do projeto Energia Já e os prompts espe
 
 ---
 
-## Fase 17 – Ranking e Tipos de Vitória (Nova)
+## Fase 17 – Ranking e Tipos de Vitória (Pendente)
 **Objetivo:** Criar condições de vitória múltiplas e ranking final.  
 **Arquivos:** `lib/game/state/game_state.dart`, `lib/game/energy_game.dart`, `lib/ui/scoreboard.dart`
 

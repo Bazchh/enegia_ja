@@ -1,5 +1,5 @@
 name: enegia_ja
-description: "ODS Energia Acessível e Limpa"
+description: "Energia Já! - ODS 7: Energia Acessível e Limpa"
 publish_to: 'none'
 
 version: 1.1.0+2
@@ -22,6 +22,7 @@ dev_dependencies:
     sdk: flutter
 
   flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.13.1
 
 
 flutter:
@@ -34,3 +35,12 @@ flutter:
     - assets/images/icons/icon_wind.png
     - assets/images/icons/icon_efficiency.png
     - assets/images/icons/icon_sanitation.png
+    - assets/images/logo.png
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/images/logo.png"
+  adaptive_icon_background: "#212121"
+  adaptive_icon_foreground: "assets/images/logo.png"
+  remove_alpha_ios: true

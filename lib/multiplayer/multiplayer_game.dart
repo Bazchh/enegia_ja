@@ -51,6 +51,9 @@ class MultiplayerGame extends EnergyGame {
     restart();
   }
 
+  @override
+  bool get shouldSaveLocally => false;
+
   bool get canAct =>
       !_playersReady.contains(socket.playerId) && !state.acabou();
 
@@ -99,9 +102,9 @@ class MultiplayerGame extends EnergyGame {
   }
 
   @override
-  PlaceResult placeAt(int x, int y, {String? actingPlayerId}) {
+  PlaceResult placeAt(int x, int y, {String? actingPlayerId, Building? building}) {
     if (_isApplyingRemoteAction) {
-      return super.placeAt(x, y, actingPlayerId: actingPlayerId);
+      return super.placeAt(x, y, actingPlayerId: actingPlayerId, building: building);
     }
 
     if (!canAct) {
@@ -116,18 +119,32 @@ class MultiplayerGame extends EnergyGame {
           lastPlaceResult = PlaceResult.invalido;
           return PlaceResult.invalido;
         }
-      } else if (!canControlCell(socket.playerId, x, y)) {
-        lastPlaceResult = PlaceResult.invalido;
-        return PlaceResult.invalido;
+      } else {
+        if (!canControlCell(socket.playerId, x, y)) {
+          lastPlaceResult = PlaceResult.invalido;
+          return PlaceResult.invalido;
+        }
+
+        // Validar orçamento ANTES de enviar ao host
+        final buildingToPlace = building ?? selecionado ?? Building.solar;
+        final custo = costOf(buildingToPlace);
+        if (localPlayerState.orcamento < custo) {
+          lastPlaceResult = PlaceResult.semOrcamento;
+          return PlaceResult.semOrcamento;
+        }
       }
 
       final action = removeMode ? 'remove' : 'place';
-      socket.sendActionRequest({'action': action, 'x': x, 'y': y});
+      final payload = {'action': action, 'x': x, 'y': y};
+      if (!removeMode && selecionado != null) {
+        payload['building'] = selecionado!.name;
+      }
+      socket.sendActionRequest(payload);
       lastPlaceResult = null;
       return PlaceResult.ok;
     }
 
-    final result = super.placeAt(x, y, actingPlayerId: socket.playerId);
+    final result = super.placeAt(x, y, actingPlayerId: socket.playerId, building: building);
     if (result == PlaceResult.ok || result == PlaceResult.removido) {
       _syncGameState();
     }
@@ -139,7 +156,6 @@ class MultiplayerGame extends EnergyGame {
     if (hasEndedTurn || state.acabou()) return;
 
     _playersReady.add(socket.playerId);
-    _broadcastTurnInfo();
 
     if (!isHost) {
       socket.sendActionRequest({'action': 'end_turn'});
@@ -171,7 +187,7 @@ class MultiplayerGame extends EnergyGame {
     state.ensurePlayer(playerId);
 
     if (!isHost) {
-      _broadcastTurnInfo();
+      // Cliente apenas aguarda sincronização do host
       return;
     }
 
@@ -235,7 +251,15 @@ class MultiplayerGame extends EnergyGame {
     switch (action) {
       case 'place':
         if (x == null || y == null) return;
-        _applyRemotePlacement(playerId, x, y);
+        final buildingName = payload['building'] as String?;
+        Building? building;
+        if (buildingName != null) {
+          building = Building.values.firstWhere(
+            (b) => b.name == buildingName,
+            orElse: () => Building.solar,
+          );
+        }
+        _applyRemotePlacement(playerId, x, y, building);
         break;
       case 'remove':
         if (x == null || y == null) return;
@@ -248,30 +272,29 @@ class MultiplayerGame extends EnergyGame {
     }
   }
 
-  void _applyRemotePlacement(String playerId, int x, int y) {
+  void _applyRemotePlacement(String playerId, int x, int y, Building? building) {
     _isApplyingRemoteAction = true;
     final previousRemoveMode = removeMode;
     removeMode = false;
-    final result = super.placeAt(x, y, actingPlayerId: playerId);
+    super.placeAt(x, y, actingPlayerId: playerId, building: building);
     removeMode = previousRemoveMode;
     _isApplyingRemoteAction = false;
 
-    if (result == PlaceResult.ok) {
-      _syncGameState();
-    }
+    // Sempre sincronizar para garantir que todos vejam o estado correto
+    // (inclusive quando ações falham por falta de orçamento)
+    _syncGameState();
   }
 
   void _applyRemoteRemoval(String playerId, int x, int y) {
     _isApplyingRemoteAction = true;
     final previousRemoveMode = removeMode;
     removeMode = true;
-    final result = super.placeAt(x, y, actingPlayerId: playerId);
+    super.placeAt(x, y, actingPlayerId: playerId);
     removeMode = previousRemoveMode;
     _isApplyingRemoteAction = false;
 
-    if (result == PlaceResult.removido) {
-      _syncGameState();
-    }
+    // Sempre sincronizar para garantir consistência
+    _syncGameState();
   }
 
   void _handleTurnUpdate(TurnUpdateMessage message) {
@@ -279,9 +302,19 @@ class MultiplayerGame extends EnergyGame {
       ..clear()
       ..addAll(message.players);
 
+    // Preservar estado otimista do jogador local em _playersReady
+    // para evitar condição de corrida com latência de rede
+    final wasLocalReady = _playersReady.contains(socket.playerId);
+
     _playersReady
       ..clear()
       ..addAll(message.readyPlayers);
+
+    // Se o jogador local estava pronto localmente mas não veio na mensagem,
+    // manter o estado otimista (a mensagem pode estar atrasada)
+    if (wasLocalReady && !_playersReady.contains(socket.playerId)) {
+      _playersReady.add(socket.playerId);
+    }
 
     state.turno = message.turn;
 

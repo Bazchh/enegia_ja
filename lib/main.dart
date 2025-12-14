@@ -36,6 +36,13 @@ class MainMenu extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
+            Image.asset(
+              'assets/images/logo.png',
+              width: 180,
+              height: 180,
+              fit: BoxFit.contain,
+            ),
+            const SizedBox(height: 20),
             const Text(
               'Energia Já!',
               style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),

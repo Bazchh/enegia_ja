@@ -21,9 +21,14 @@ class EnergyGame extends FlameGame {
   late GameState state;
   Building? selecionado;
   late final Map<Building, Sprite> sprites;
-  PlaceResult? lastPlaceResult;
+
+  // Map de resultados por jogador para evitar feedback incorreto em multiplayer
+  final Map<String, PlaceResult?> _lastPlaceResults = {};
 
   bool removeMode = false;
+
+  PlaceResult? get lastPlaceResult => _lastPlaceResults[_localPlayerId];
+  set lastPlaceResult(PlaceResult? value) => _lastPlaceResults[_localPlayerId] = value;
 
   String _localPlayerId = 'solo';
   final Map<String, Color> _ownerColors = {};
@@ -175,7 +180,7 @@ class EnergyGame extends FlameGame {
     saveGame();
   }
 
-  PlaceResult placeAt(int x, int y, {String? actingPlayerId}) {
+  PlaceResult placeAt(int x, int y, {String? actingPlayerId, Building? building}) {
     final playerId = actingPlayerId ?? _localPlayerId;
     final actingState = _playerState(playerId);
 
@@ -203,7 +208,7 @@ class EnergyGame extends FlameGame {
       return PlaceResult.removido;
     }
 
-    final building = selecionado ?? Building.solar;
+    final buildingToPlace = building ?? selecionado ?? Building.solar;
     if (cell.b != Building.vazio) {
       return lastPlaceResult = PlaceResult.invalido;
     }
@@ -212,14 +217,14 @@ class EnergyGame extends FlameGame {
       return lastPlaceResult = PlaceResult.invalido;
     }
 
-    final custo = costOf(building);
+    final custo = costOf(buildingToPlace);
     if (actingState.orcamento < custo) {
       return lastPlaceResult = PlaceResult.semOrcamento;
     }
 
     actingState.orcamento -= custo;
     cell
-      ..b = building
+      ..b = buildingToPlace
       ..powered = true
       ..ownerId = playerId;
     lastPlaceResult = PlaceResult.ok;
@@ -419,7 +424,11 @@ class EnergyGame extends FlameGame {
     }
   }
 
+  @protected
+  bool get shouldSaveLocally => true;
+
   Future<void> saveGame() async {
+    if (!shouldSaveLocally) return;
     final sp = await SharedPreferences.getInstance();
     await sp.setString(_stateKey, jsonEncode(state.toJson()));
   }
