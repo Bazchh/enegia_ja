@@ -1,3 +1,6 @@
+import '../economy.dart';
+import '../world_events.dart';
+
 enum Building { vazio, solar, eolica, eficiencia, saneamento }
 
 class Metrics {
@@ -46,12 +49,16 @@ class CellModel {
   Building b;
   bool powered;
   String? ownerId;
+  Map<String, double> influence; // Influência de cada jogador nesta célula
+  bool justConquered; // Marca células recém-conquistadas para animação
 
   CellModel({
     this.b = Building.vazio,
     this.powered = false,
     this.ownerId,
-  });
+    Map<String, double>? influence,
+    this.justConquered = false,
+  }) : influence = influence ?? {};
 
   factory CellModel.fromJson(Map<String, dynamic> json) => CellModel(
         b: Building.values.firstWhere(
@@ -60,46 +67,75 @@ class CellModel {
         ),
         powered: json['powered'] ?? false,
         ownerId: json['ownerId']?.toString(),
+        influence: json['influence'] is Map
+            ? Map<String, double>.from(
+                (json['influence'] as Map).map(
+                  (k, v) => MapEntry(k.toString(), (v as num).toDouble()),
+                ),
+              )
+            : {},
       );
 
   Map<String, dynamic> toJson() => {
         'b': b.name,
         'powered': powered,
         if (ownerId != null) 'ownerId': ownerId,
+        if (influence.isNotEmpty) 'influence': influence,
       };
 }
 
 class PlayerState {
   double orcamento;
   final Metrics metrics;
+  final PlayerEconomy economy;
+  double influenciaEnergia; // Solar + Eólica
+  double influenciaSocial; // Eficiência + Saneamento
 
   PlayerState({
-    this.orcamento = 100,
+    this.orcamento = 150, // Aumentado de 100 para 150 - Mais margem inicial
     Metrics? metrics,
-  }) : metrics = metrics ?? Metrics();
+    PlayerEconomy? economy,
+    this.influenciaEnergia = 0.0,
+    this.influenciaSocial = 0.0,
+  })  : metrics = metrics ?? Metrics(),
+        economy = economy ?? PlayerEconomy();
 
   factory PlayerState.fromJson(Map<String, dynamic> json) => PlayerState(
         orcamento: (json['orcamento'] ?? 100).toDouble(),
         metrics: json['metrics'] is Map<String, dynamic>
             ? Metrics.fromJson(json['metrics'] as Map<String, dynamic>)
             : Metrics(),
+        economy: json['economy'] is Map<String, dynamic>
+            ? PlayerEconomy.fromJson(json['economy'] as Map<String, dynamic>)
+            : PlayerEconomy(),
+        influenciaEnergia: (json['influenciaEnergia'] ?? 0.0).toDouble(),
+        influenciaSocial: (json['influenciaSocial'] ?? 0.0).toDouble(),
       );
 
   Map<String, dynamic> toJson() => {
         'orcamento': orcamento,
         'metrics': metrics.toJson(),
+        'economy': economy.toJson(),
+        'influenciaEnergia': influenciaEnergia,
+        'influenciaSocial': influenciaSocial,
       };
 
   void reset() {
-    orcamento = 100;
+    orcamento = 150; // Atualizado de 100 para 150
     metrics.reset();
+    economy.reset();
+    influenciaEnergia = 0.0;
+    influenciaSocial = 0.0;
   }
+
+  double get influenciaTotal => influenciaEnergia + influenciaSocial;
 }
 
 class GameState {
   final int size;
   int turno = 1;
   final metrics = Metrics();
+  final worldState = WorldState();
   late List<List<CellModel>> grid;
   final Map<String, PlayerState> playerStates = {};
 
@@ -121,6 +157,14 @@ class GameState {
         ..educacao = parsed.educacao
         ..desigualdade = parsed.desigualdade
         ..clima = parsed.clima;
+    }
+
+    if (json['worldState'] is Map<String, dynamic>) {
+      final parsed = WorldState.fromJson(json['worldState']);
+      state.worldState
+        ..temperaturaGlobal = parsed.temperaturaGlobal
+        ..poluicaoAtmosferica = parsed.poluicaoAtmosferica
+        ..activeEvents = parsed.activeEvents;
     }
 
     if (json['grid'] is List) {
@@ -171,6 +215,7 @@ class GameState {
   void reset() {
     turno = 1;
     metrics.reset();
+    worldState.reset();
     for (var x = 0; x < size; x++) {
       for (var y = 0; y < size; y++) {
         grid[x][y] = CellModel();
@@ -185,6 +230,7 @@ class GameState {
         'size': size,
         'turno': turno,
         'metrics': metrics.toJson(),
+        'worldState': worldState.toJson(),
         'grid': [
           for (final row in grid) [for (final cell in row) cell.toJson()],
         ],
@@ -194,9 +240,22 @@ class GameState {
       };
 
   bool venceu() =>
-      metrics.acessoEnergia >= 0.80 &&
-      metrics.limpa >= 0.80 &&
-      metrics.tarifa <= 1.0;
+      metrics.acessoEnergia >= 0.60 && // Reduzido de 80% para 60%
+      metrics.limpa >= 0.60 &&          // Reduzido de 80% para 60%
+      metrics.tarifa <= 1.1;            // Aumentado de 1.0 para 1.1 (mais margem)
 
   bool acabou() => turno > 20 || venceu();
+
+  // Calcular território de um jogador
+  int getTerritorySize(String playerId) {
+    var count = 0;
+    for (var x = 0; x < size; x++) {
+      for (var y = 0; y < size; y++) {
+        if (grid[x][y].ownerId == playerId) {
+          count++;
+        }
+      }
+    }
+    return count;
+  }
 }

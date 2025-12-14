@@ -53,6 +53,56 @@ class Cell extends PositionComponent
         ..color = borderColor,
     );
 
+    // Destacar células recém-conquistadas
+    if (model.justConquered) {
+      // Brilho dourado pulsante
+      canvas.drawRect(
+        size.toRect(),
+        Paint()
+          ..color = const Color(0xFFFFB300).withValues(alpha: 0.4)
+          ..style = PaintingStyle.fill,
+      );
+
+      // Borda grossa dourada
+      canvas.drawRect(
+        size.toRect().deflate(3),
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3.0
+          ..color = const Color(0xFFFFB300),
+      );
+    }
+
+    // Mostrar zona em disputa (múltiplos jogadores com influência)
+    if (model.influence.length > 1 && model.b == Building.vazio) {
+      final sorted = model.influence.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
+
+      // Borda dupla com cores dos 2 jogadores com mais influência
+      if (sorted.length >= 2) {
+        final color1 = game.borderColorForOwner(sorted[0].key);
+        final color2 = game.borderColorForOwner(sorted[1].key);
+
+        // Borda externa
+        canvas.drawRect(
+          size.toRect().deflate(2),
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2.5
+            ..color = color1,
+        );
+
+        // Borda interna
+        canvas.drawRect(
+          size.toRect().deflate(5),
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.5
+            ..color = color2,
+        );
+      }
+    }
+
     // ===== Preview overlays =====
     if (!game.removeMode) {
       // Build: outline green/red depending on budget

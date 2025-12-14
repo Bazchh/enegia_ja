@@ -94,49 +94,67 @@ class _LobbyScreenState extends State<LobbyScreen> {
             Container(
               width: double.infinity,
               margin: const EdgeInsets.all(16),
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: theme.colorScheme.primaryContainer,
+                color: const Color(0xFF2C2C2C), // Cinza médio
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: theme.colorScheme.primary,
-                  width: 2,
+                  color: const Color(0xFFFFB300), // Amarelo/Dourado
+                  width: 3,
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFFFB300).withValues(alpha: 0.3),
+                    blurRadius: 12,
+                    spreadRadius: 1,
+                  ),
+                ],
               ),
               child: Column(
                 children: [
                   Text(
                     'CÓDIGO DA SALA',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.onPrimaryContainer,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: const Color(0xFFFFFFFF), // Branco
                       fontWeight: FontWeight.bold,
+                      letterSpacing: 1.5,
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 12),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
                         _controller.roomId,
-                        style: theme.textTheme.headlineMedium?.copyWith(
-                          color: theme.colorScheme.primary,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 2,
+                        style: theme.textTheme.headlineLarge?.copyWith(
+                          color: const Color(0xFFFFB300), // Amarelo/Dourado
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 4,
+                          shadows: [
+                            Shadow(
+                              color: const Color(0xFFFFB300).withValues(alpha: 0.5),
+                              blurRadius: 8,
+                            ),
+                          ],
                         ),
                       ),
                       const SizedBox(width: 12),
                       IconButton(
-                        icon: const Icon(Icons.copy),
+                        icon: const Icon(Icons.copy, color: Color(0xFFFFB300)),
                         onPressed: () {
                           Clipboard.setData(ClipboardData(text: _controller.roomId));
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text('Código copiado!'),
+                              backgroundColor: Color(0xFFFFB300),
                               duration: Duration(seconds: 1),
                             ),
                           );
                         },
                         tooltip: 'Copiar código',
+                        style: IconButton.styleFrom(
+                          backgroundColor: const Color(0xFF1A1A1A),
+                        ),
                       ),
                     ],
                   ),
