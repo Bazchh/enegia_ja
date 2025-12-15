@@ -606,10 +606,10 @@ class EnergyGame extends FlameGame with PanDetector {
         // Para cada célula com construção, propagar influência
         if (cell.b != Building.vazio && cell.ownerId != null) {
           final playerId = cell.ownerId!;
-          final player = _playerState(playerId);
           final influenceValue = _getBuildingInfluence(cell.b);
 
-          _propagateInfluence(x, y, playerId, influenceValue * player.influenciaTotal, influenceMap);
+          // Usar apenas influência base do building (SEM multiplicador de influenciaTotal)
+          _propagateInfluence(x, y, playerId, influenceValue, influenceMap);
         }
       }
     }
@@ -622,10 +622,10 @@ class EnergyGame extends FlameGame with PanDetector {
     switch (b) {
       case Building.solar:
       case Building.eolica:
-        return 1.5; // Energia limpa tem mais alcance
+        return 1.2; // Reduzido para crescimento mais gradual
       case Building.eficiencia:
       case Building.saneamento:
-        return 1.2;
+        return 1.0; // Reduzido para crescimento mais gradual
       case Building.vazio:
         return 0.0;
     }
@@ -686,8 +686,8 @@ class EnergyGame extends FlameGame with PanDetector {
     // Coletar células conquistáveis por jogador
     final conquestCandidates = <String, List<(int, int, double, int)>>{}; // playerId -> [(x, y, influence, priority)]
 
-    const decay = 0.9; // retém influência de turnos anteriores, mas reduz
-    const threshold = 12.0; // exige vários turnos ou múltiplas construções
+    const decay = 0.95; // retém 95% da influência anterior (acumula mais rápido)
+    const threshold = 8.0; // ~7 turnos com 1 construção, ~4 turnos com 2
 
     for (final entry in influenceMap.entries) {
       final coords = entry.key.split(',');
