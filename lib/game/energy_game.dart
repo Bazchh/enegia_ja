@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flame/components.dart' show Anchor, Sprite, Vector2;
+import 'package:flame/events.dart';
 import 'package:flame/flame.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
@@ -14,9 +15,9 @@ import 'world_events.dart';
 
 enum PlaceResult { ok, semOrcamento, invalido, removido }
 
-class EnergyGame extends FlameGame {
-  EnergyGame() {
-    state = GameState(size: 10);
+class EnergyGame extends FlameGame with PanDetector {
+  EnergyGame({int gridSize = 40}) { // Grid grande para exploração
+    state = GameState(size: gridSize);
     selecionado = Building.solar;
     setLocalPlayer('solo');
   }
@@ -36,10 +37,16 @@ class EnergyGame extends FlameGame {
   String _localPlayerId = 'solo';
   final Map<String, Color> _ownerColors = {};
 
+  // Fog of War: Mapa de visibilidade por jogador
+  final Map<String, List<List<VisibilityState>>> _visibility = {};
+  static const int _visionRadius = 2; // Raio de visão ao redor de territórios
+
   double tileSize = 64.0;
   double reservedTop = 120;
   double reservedBottom = 140;
   Vector2 gridOffset = Vector2.zero();
+  final Map<String, (int, int)> _playerSpawns = {};
+  bool _cameraCentered = false;
 
   double bestClean = 0.0;
   int bestTurn = 999;
@@ -66,6 +73,9 @@ class EnergyGame extends FlameGame {
   @override
   Color backgroundColor() => const Color(0xFF212121);
 
+  @override
+  bool get debugMode => false;
+
   String get localPlayerId => _localPlayerId;
 
   void setLocalPlayer(String playerId) {
@@ -75,6 +85,159 @@ class EnergyGame extends FlameGame {
       playerId,
       () => Colors.lightBlueAccent,
     );
+  }
+
+  /// Inicializa spawns aleatórios para todos os jogadores registrados
+  void initializePlayerSpawns() {
+    final playerIds = state.registeredPlayers.toList();
+    if (playerIds.isEmpty) return;
+
+    final spawnPositions = _generateSpawnPositions(playerIds.length);
+
+    for (int i = 0; i < playerIds.length && i < spawnPositions.length; i++) {
+      final playerId = playerIds[i];
+      final spawn = spawnPositions[i];
+
+      // Dar território inicial (3x3 ao redor do spawn)
+      _claimInitialTerritory(playerId, spawn.$1, spawn.$2);
+      recordPlayerSpawn(playerId, spawn.$1, spawn.$2, centerIfLocal: false);
+    }
+  }
+
+  /// Centraliza a câmera em uma célula específica
+  void _centerCameraOnCell(int x, int y) {
+    final cellCenterX = gridOffset.x + x * tileSize + tileSize / 2;
+    final cellCenterY = gridOffset.y + y * tileSize + tileSize / 2;
+
+    camera.viewfinder.position = Vector2(cellCenterX, cellCenterY);
+  }
+
+  /// Registra o ponto de spawn de um jogador e, opcionalmente, centraliza a câmera se for o jogador local.
+  void recordPlayerSpawn(String playerId, int x, int y, {bool centerIfLocal = false}) {
+    _playerSpawns[playerId] = (x, y);
+
+    if (centerIfLocal && playerId == _localPlayerId) {
+      _centerCameraOnCell(x, y);
+      _cameraCentered = true;
+    }
+  }
+
+  /// Solicita recentralizar a câmera; se recenterNow for true, tenta imediatamente.
+  void requestCameraRecenter({bool recenterNow = false}) {
+    _cameraCentered = false;
+    if (recenterNow) {
+      _centerCameraOnLocalSpawnIfNeeded();
+    }
+  }
+
+  /// Gera posições de spawn com distância mínima entre elas
+  List<(int, int)> _generateSpawnPositions(int count) {
+    final positions = <(int, int)>[];
+    final minDistance = (state.size * 0.3).toInt(); // 30% do tamanho do mapa
+    final random = DateTime.now().millisecondsSinceEpoch;
+    var attempts = 0;
+    const maxAttempts = 100;
+
+    while (positions.length < count && attempts < maxAttempts) {
+      attempts++;
+
+      // Gerar posição aleatória
+      final x = (random * (attempts + 1) * 7) % state.size;
+      final y = (random * (attempts + 1) * 13) % state.size;
+
+      // Verificar se está longe o suficiente de outros spawns
+      var tooClose = false;
+      for (final existing in positions) {
+        final distance = _calculateDistance(x, y, existing.$1, existing.$2);
+        if (distance < minDistance) {
+          tooClose = true;
+          break;
+        }
+      }
+
+      if (!tooClose) {
+        positions.add((x, y));
+      }
+    }
+
+    // Se não conseguiu gerar todos, usar posições nos cantos
+    if (positions.length < count) {
+      final corners = [
+        (2, 2), // Canto superior esquerdo
+        (state.size - 3, 2), // Canto superior direito
+        (2, state.size - 3), // Canto inferior esquerdo
+        (state.size - 3, state.size - 3), // Canto inferior direito
+        (state.size ~/ 2, 2), // Meio superior
+        (state.size ~/ 2, state.size - 3), // Meio inferior
+      ];
+
+      for (final corner in corners) {
+        if (positions.length >= count) break;
+        if (!positions.contains(corner)) {
+          positions.add(corner);
+        }
+      }
+    }
+
+    return positions;
+  }
+
+  /// Calcula distância entre duas posições (Manhattan distance)
+  double _calculateDistance(int x1, int y1, int x2, int y2) {
+    return ((x1 - x2).abs() + (y1 - y2).abs()).toDouble();
+  }
+
+  /// Dá território inicial ao redor do spawn
+  void _claimInitialTerritory(String playerId, int centerX, int centerY) {
+    // Dar 3x3 de território inicial
+    for (var dx = -1; dx <= 1; dx++) {
+      for (var dy = -1; dy <= 1; dy++) {
+        final x = centerX + dx;
+        final y = centerY + dy;
+
+        if (!_outOfBounds(x, y)) {
+          state.grid[x][y].ownerId = playerId;
+        }
+      }
+    }
+  }
+
+  /// Gera pontos de recurso estratégicos aleatoriamente no mapa
+  void generateStrategicResources() {
+    final resourceTypes = [
+      ResourceType.energyBonus,
+      ResourceType.treasury,
+      ResourceType.cleanSource,
+      ResourceType.research,
+      ResourceType.fertileLand,
+    ];
+
+    // Gerar ~3% do mapa como recursos (para 40x40 = 48 recursos)
+    final resourceCount = (state.size * state.size * 0.03).toInt();
+    final random = DateTime.now().millisecondsSinceEpoch;
+    var placed = 0;
+    var attempts = 0;
+    const maxAttempts = 1000;
+
+    while (placed < resourceCount && attempts < maxAttempts) {
+      attempts++;
+
+      // Posição aleatória
+      final x = (random * (attempts + 1) * 17) % state.size;
+      final y = (random * (attempts + 1) * 23) % state.size;
+
+      final cell = state.grid[x][y];
+
+      // Não colocar recurso em célula que já tem recurso ou building
+      if (cell.resource != ResourceType.none || cell.b != Building.vazio) {
+        continue;
+      }
+
+      // Distribuir recursos uniformemente
+      final resourceType = resourceTypes[placed % resourceTypes.length];
+      cell.resource = resourceType;
+      placed++;
+    }
   }
 
   void setOwnerColor(String ownerId, Color color) {
@@ -139,6 +302,7 @@ class EnergyGame extends FlameGame {
       }
     }
     _applyLayoutToCells();
+    _centerCameraOnLocalSpawnIfNeeded();
     _recomputeMetrics();
   }
 
@@ -154,10 +318,16 @@ class EnergyGame extends FlameGame {
 
     final usableHeight =
         (size.y - reservedTop - reservedBottom).clamp(100, size.y);
-    final maxTileX = size.x / state.size;
-    final maxTileY = usableHeight / state.size;
-    tileSize = maxTileX < maxTileY ? maxTileX : maxTileY;
-    if (tileSize < 20) tileSize = 20;
+
+    // Para mapas grandes, usar tile size fixo ao invés de tentar caber tudo
+    if (state.size > 12) {
+      tileSize = 50.0; // Tamanho fixo para mapas grandes
+    } else {
+      final maxTileX = size.x / state.size;
+      final maxTileY = usableHeight / state.size;
+      tileSize = maxTileX < maxTileY ? maxTileX : maxTileY;
+      if (tileSize < 20) tileSize = 20;
+    }
 
     final gridPxW = tileSize * state.size;
     final gridPxH = tileSize * state.size;
@@ -181,6 +351,15 @@ class EnergyGame extends FlameGame {
     selecionado ??= Building.solar;
     removeMode = false;
     lastPlaceResult = null;
+    _cameraCentered = false;
+    _playerSpawns.clear();
+
+    // Reinicializar spawns
+    initializePlayerSpawns();
+
+    // Gerar recursos estratégicos no mapa
+    generateStrategicResources();
+
     _recomputeMetrics();
     saveGame();
   }
@@ -222,7 +401,14 @@ class EnergyGame extends FlameGame {
       return lastPlaceResult = PlaceResult.invalido;
     }
 
-    final custo = costOf(buildingToPlace);
+    var custo = costOf(buildingToPlace);
+
+    // Aplicar desconto de Terra Fértil
+    final fertileLandCount = _countControlledResources(playerId, ResourceType.fertileLand);
+    if (fertileLandCount > 0) {
+      custo *= 0.8; // 20% de desconto
+    }
+
     if (actingState.orcamento < custo) {
       return lastPlaceResult = PlaceResult.semOrcamento;
     }
@@ -254,16 +440,25 @@ class EnergyGame extends FlameGame {
     for (final playerId in state.registeredPlayers) {
       final playerState = _playerState(playerId);
       final efficiencyBonus =
-          _countOwned(playerId, Building.eficiencia) * 0.6; // Era 0.5
+          _countOwned(playerId, Building.eficiencia) * 0.4; // Reduzido para crescimento gradual
 
-      // Orçamento base + bônus eficiência + impacto econômico
-      playerState.orcamento += 6 + efficiencyBonus + playerState.economy.economicImpact; // Base era 4, agora 6
+      // Contar recursos de tesouro controlados
+      final treasuryBonus = _countControlledResources(playerId, ResourceType.treasury) * 3.0; // Reduzido de 5 para 3
+
+      // Orçamento base + bônus eficiência + impacto econômico + recursos (crescimento GRADUAL)
+      playerState.orcamento += 3 + efficiencyBonus + playerState.economy.economicImpact + treasuryBonus; // Base reduzido de 6 para 3
     }
 
     _recomputeMetrics();
     _expandTerritories(); // Nova função de expansão
     _updateWorldClimate();
     _captureProgress();
+
+    // Atualizar visibilidade (fog of war) para todos os jogadores
+    for (final playerId in state.registeredPlayers) {
+      _updateVisibility(playerId);
+    }
+
     saveGame();
   }
 
@@ -317,11 +512,20 @@ class EnergyGame extends FlameGame {
         effectiveClean += windCount * 0.4; // +40% bonus
       }
 
-      final effectiveCleanRatio = built == 0 ? 0.0 : (effectiveClean / built).clamp(0, 1).toDouble();
+      // Aplicar bônus de recursos estratégicos
+      final energyBonusCount = _countControlledResources(playerId, ResourceType.energyBonus);
+      final cleanSourceCount = _countControlledResources(playerId, ResourceType.cleanSource);
+      final researchCount = _countControlledResources(playerId, ResourceType.research);
+
+      effectiveClean += energyBonusCount * 0.2 * built; // +20% produção de energia
+
+      var effectiveCleanRatio = built == 0 ? 0.0 : (effectiveClean / built).clamp(0, 1).toDouble();
+      effectiveCleanRatio = (effectiveCleanRatio + cleanSourceCount * 0.15).clamp(0, 1).toDouble(); // +15% sustentabilidade
 
       var tarifa = _computeTarifa(acc.clean, built, acc.efficiency);
       var saude = (0.40 + acc.sanitation / territory * 0.60).clamp(0, 1).toDouble();
       var clima = (0.45 + effectiveClean / territory * 0.55).clamp(0, 1).toDouble();
+      var educacao = (0.35 + acc.efficiency / territory * 0.55 + researchCount * 0.10).clamp(0, 1).toDouble(); // +10% educação
 
       // Aplicar efeitos de eventos
       if (state.worldState.hasActiveEvent(EventType.criseTarifaria)) {
@@ -339,8 +543,7 @@ class EnergyGame extends FlameGame {
         ..limpa = effectiveCleanRatio
         ..tarifa = tarifa
         ..saude = saude
-        ..educacao =
-            (0.35 + acc.efficiency / territory * 0.55).clamp(0, 1).toDouble()
+        ..educacao = educacao
         ..desigualdade =
             (0.60 - (acc.sanitation + acc.efficiency) / territory * 0.45)
                 .clamp(0, 1)
@@ -435,7 +638,7 @@ class EnergyGame extends FlameGame {
     double baseInfluence,
     Map<String, Map<String, double>> influenceMap,
   ) {
-    const radius = 2; // Alcance de influência
+    const radius = 1; // Apenas células adjacentes (distância 1)
 
     for (var dx = -radius; dx <= radius; dx++) {
       for (var dy = -radius; dy <= radius; dy++) {
@@ -446,12 +649,28 @@ class EnergyGame extends FlameGame {
 
         if (_outOfBounds(x, y)) continue;
 
-        final distance = (dx.abs() + dy.abs()).toDouble();
-        final influence = baseInfluence / (distance + 1);
+        // Apenas distância Manhattan de 1 (4 direções cardeais, não diagonais)
+        if (dx.abs() + dy.abs() > 1) continue;
 
         final key = '$x,$y';
         influenceMap.putIfAbsent(key, () => {});
-        influenceMap[key]![playerId] = (influenceMap[key]![playerId] ?? 0) + influence;
+
+        final currentInfluence = influenceMap[key]![playerId] ?? 0;
+
+        // Diminishing returns: cada construção adicional contribui menos
+        // 1ª construção: 100%, 2ª: 60%, 3ª: 40%, 4ª+: 25%
+        double multiplier = 1.0;
+        if (currentInfluence > 0) {
+          if (currentInfluence < 1.5) {
+            multiplier = 0.6; // Segunda construção
+          } else if (currentInfluence < 2.5) {
+            multiplier = 0.4; // Terceira construção
+          } else {
+            multiplier = 0.25; // Quarta+ construção
+          }
+        }
+
+        influenceMap[key]![playerId] = currentInfluence + (baseInfluence * multiplier);
       }
     }
   }
@@ -464,34 +683,73 @@ class EnergyGame extends FlameGame {
       }
     }
 
+    // Coletar células conquistáveis por jogador
+    final conquestCandidates = <String, List<(int, int, double, int)>>{}; // playerId -> [(x, y, influence, priority)]
+
+    const decay = 0.9; // retém influência de turnos anteriores, mas reduz
+    const threshold = 12.0; // exige vários turnos ou múltiplas construções
+
     for (final entry in influenceMap.entries) {
       final coords = entry.key.split(',');
       final x = int.parse(coords[0]);
       final y = int.parse(coords[1]);
       final cell = state.grid[x][y];
 
-      // Atualizar mapa de influência na célula
-      cell.influence = Map.from(entry.value);
+      // Atualizar mapa de influência na célula acumulando com decaimento
+      final newInfluence = <String, double>{};
+      for (final playerEntry in entry.value.entries) {
+        final previous = cell.influence[playerEntry.key] ?? 0.0;
+        final updated = previous * decay + playerEntry.value;
+        newInfluence[playerEntry.key] = updated;
+      }
+      // Decair influências antigas sem entrada nova
+      for (final oldEntry in cell.influence.entries) {
+        if (newInfluence.containsKey(oldEntry.key)) continue;
+        final decayed = oldEntry.value * decay;
+        if (decayed > 0.01) {
+          newInfluence[oldEntry.key] = decayed;
+        }
+      }
+      cell.influence = newInfluence;
 
       // Só pode tomar território se célula estiver vazia
       if (cell.b == Building.vazio && cell.ownerId == null) {
-        // Encontrar jogador com maior influência
-        String? dominantPlayer;
-        double maxInfluence = 3.0; // Threshold mínimo
+        for (final playerEntry in cell.influence.entries) {
+          if (playerEntry.value >= threshold) {
+            final playerId = playerEntry.key;
 
-        for (final playerEntry in entry.value.entries) {
-          if (playerEntry.value > maxInfluence) {
-            maxInfluence = playerEntry.value;
-            dominantPlayer = playerEntry.key;
+            // Calcular prioridade da célula (recursos são mais importantes)
+            var priority = 0;
+            if (cell.resource != ResourceType.none) {
+              priority = 100; // Células com recurso têm prioridade máxima
+            }
+
+            conquestCandidates.putIfAbsent(playerId, () => []);
+            conquestCandidates[playerId]!.add((x, y, playerEntry.value, priority));
           }
         }
-
-        // Atribuir território ao jogador dominante
-        if (dominantPlayer != null) {
-          cell.ownerId = dominantPlayer;
-          cell.justConquered = true; // Marcar como recém-conquistada
-        }
       }
+    }
+
+    // Para cada jogador, conquistar apenas a célula mais importante
+    for (final entry in conquestCandidates.entries) {
+      final playerId = entry.key;
+      final candidates = entry.value;
+
+      if (candidates.isEmpty) continue;
+
+      // Ordenar por prioridade (recursos primeiro) e depois por influência
+      candidates.sort((a, b) {
+        final priorityCompare = b.$4.compareTo(a.$4); // Maior prioridade primeiro
+        if (priorityCompare != 0) return priorityCompare;
+        return b.$3.compareTo(a.$3); // Maior influência primeiro
+      });
+
+      // Conquistar apenas a célula mais importante
+      final bestCandidate = candidates.first;
+      final cell = state.grid[bestCandidate.$1][bestCandidate.$2];
+      cell.ownerId = playerId;
+      cell.justConquered = true;
     }
   }
 
@@ -524,6 +782,19 @@ class EnergyGame extends FlameGame {
     return _countOwned(playerId, b);
   }
 
+  /// Conta quantos recursos de um tipo específico um jogador controla
+  int _countControlledResources(String playerId, ResourceType resourceType) {
+    int count = 0;
+    for (var x = 0; x < state.size; x++) {
+      for (var y = 0; y < state.size; y++) {
+        final cell = state.grid[x][y];
+        if (cell.ownerId == playerId && cell.resource == resourceType) {
+          count++;
+        }
+      }
+    }
+    return count;
+  }
 
   bool _outOfBounds(int x, int y) =>
       x < 0 || y < 0 || x >= state.size || y >= state.size;
@@ -539,41 +810,106 @@ class EnergyGame extends FlameGame {
     return false;
   }
 
-  @protected
-  bool canControlCell(String playerId, int x, int y) {
-    final cell = state.grid[x][y];
-    if (cell.ownerId != null && cell.ownerId != playerId) {
-      return false;
+  /// Inicializa visibilidade para um jogador (tudo unexplored)
+  void _initVisibility(String playerId) {
+    _visibility[playerId] = List.generate(
+      state.size,
+      (_) => List.filled(state.size, VisibilityState.unexplored),
+    );
+  }
+
+  /// Atualiza visibilidade baseado nos territórios do jogador
+  void _updateVisibility(String playerId) {
+    if (!_visibility.containsKey(playerId)) {
+      _initVisibility(playerId);
     }
 
+    final visibility = _visibility[playerId]!;
+
+    // Primeiro, marcar tudo como explored (exceto unexplored que permanece)
+    for (var x = 0; x < state.size; x++) {
+      for (var y = 0; y < state.size; y++) {
+        if (visibility[x][y] == VisibilityState.visible) {
+          visibility[x][y] = VisibilityState.explored;
+        }
+      }
+    }
+
+    // Revelar áreas ao redor de territórios controlados
+    for (var x = 0; x < state.size; x++) {
+      for (var y = 0; y < state.size; y++) {
+        final cell = state.grid[x][y];
+
+        // Se jogador controla esta célula, revelar área ao redor
+        if (cell.ownerId == playerId) {
+          _revealArea(playerId, x, y);
+        }
+      }
+    }
+  }
+
+  /// Revela área ao redor de uma posição
+  void _revealArea(String playerId, int centerX, int centerY) {
+    final visibility = _visibility[playerId]!;
+
+    for (var dx = -_visionRadius; dx <= _visionRadius; dx++) {
+      for (var dy = -_visionRadius; dy <= _visionRadius; dy++) {
+        final x = centerX + dx;
+        final y = centerY + dy;
+
+        if (!_outOfBounds(x, y)) {
+          visibility[x][y] = VisibilityState.visible;
+        }
+      }
+    }
+  }
+
+  /// Obtém estado de visibilidade de uma célula para o jogador local
+  VisibilityState getCellVisibility(int x, int y) {
+    if (!_visibility.containsKey(_localPlayerId)) {
+      _initVisibility(_localPlayerId);
+      _updateVisibility(_localPlayerId);
+    }
+
+    return _visibility[_localPlayerId]![x][y];
+  }
+
+  bool canControlCell(String playerId, int x, int y) {
+    final cell = state.grid[x][y];
+
+    // Só pode construir em células que já são do jogador
     if (cell.ownerId == playerId) {
       return true;
     }
 
-    if (!playerHasAnyCell(playerId)) {
+    // Exceção: Se jogador não tem território ainda, pode colocar em qualquer célula vazia
+    if (!playerHasAnyCell(playerId) && cell.ownerId == null) {
       return true;
     }
 
-    return _hasAdjacentOwnedCell(playerId, x, y);
+    // Não pode construir em células de outros jogadores ou células vazias
+    return false;
   }
 
-  bool _hasAdjacentOwnedCell(String playerId, int x, int y) {
-    const dirs = [
-      [1, 0],
-      [-1, 0],
-      [0, 1],
-      [0, -1],
-    ];
+  void _centerCameraOnLocalSpawnIfNeeded() {
+    if (_cameraCentered) return;
 
-    for (final dir in dirs) {
-      final nx = x + dir[0];
-      final ny = y + dir[1];
-      if (_outOfBounds(nx, ny)) continue;
-      if (state.grid[nx][ny].ownerId == playerId) {
-        return true;
+    final spawn = _playerSpawns[_localPlayerId] ?? _findFirstOwnedCell(_localPlayerId);
+    if (spawn == null) return;
+
+    _centerCameraOnCell(spawn.$1, spawn.$2);
+    _cameraCentered = true;
+  }
+
+  (int, int)? _findFirstOwnedCell(String playerId) {
+    for (var x = 0; x < state.size; x++) {
+      for (var y = 0; y < state.size; y++) {
+        if (state.grid[x][y].ownerId == playerId) {
+          return (x, y);
+        }
       }
     }
-    return false;
+    return null;
   }
 
   Future<void> _loadProgress() async {
@@ -619,7 +955,15 @@ class EnergyGame extends FlameGame {
         final decoded = jsonDecode(raw);
         if (decoded is Map<String, dynamic>) {
           data = decoded;
-          state = GameState.fromJson(decoded);
+          final loadedState = GameState.fromJson(decoded);
+
+          // Se o mapa salvo for muito pequeno (antigo), descartar e criar novo
+          if (loadedState.size < 40) {
+            state = GameState(size: state.size);
+            restart(); // Reiniciar com novo mapa
+          } else {
+            state = loadedState;
+          }
         } else {
           state = GameState(size: state.size);
         }
@@ -641,6 +985,49 @@ class EnergyGame extends FlameGame {
 
     _recomputeMetrics();
     selecionado ??= Building.solar;
+
+    // Se não tem território inicial, criar spawns
+    if (!playerHasAnyCell(_localPlayerId)) {
+      initializePlayerSpawns();
+      _recomputeMetrics();
+      saveGame();
+    }
+  }
+
+  // ===== Sistema de Pan/Scroll do Mapa =====
+
+  Vector2? _panStartPosition;
+  Vector2? _cameraStartPosition;
+
+  @override
+  void onPanStart(DragStartInfo info) {
+    _panStartPosition = info.eventPosition.global;
+    _cameraStartPosition = camera.viewfinder.position.clone();
+  }
+
+  @override
+  void onPanUpdate(DragUpdateInfo info) {
+    if (_panStartPosition == null || _cameraStartPosition == null) return;
+
+    final delta = info.eventPosition.global - _panStartPosition!;
+    camera.viewfinder.position = _cameraStartPosition! - delta;
+
+    // Limitar o pan para não sair do mapa
+    final gridPixelSize = state.size * tileSize;
+    camera.viewfinder.position.x = camera.viewfinder.position.x.clamp(
+      -gridPixelSize * 0.2,
+      gridPixelSize * 0.2,
+    );
+    camera.viewfinder.position.y = camera.viewfinder.position.y.clamp(
+      -gridPixelSize * 0.2,
+      gridPixelSize * 0.2,
+    );
+  }
+
+  @override
+  void onPanEnd(DragEndInfo info) {
+    _panStartPosition = null;
+    _cameraStartPosition = null;
   }
 
   // ===== Sistema Econômico (Fase 15) =====
@@ -834,6 +1221,75 @@ class EnergyGame extends FlameGame {
   /// Verifica se há vitória coletiva
   bool hasCollectiveVictory() {
     return state.metrics.clima >= 0.7;
+  }
+
+  /// Calcula progresso parcial de cada tipo de vitória (0.0 a 1.0)
+  Map<String, Map<VictoryType, double>> calculateVictoryProgress() {
+    final progress = <String, Map<VictoryType, double>>{};
+    const econBase = 20.0;
+    const econTarget = 300.0;
+    const baseEdu = 0.5;
+    const baseTarifa = 1.0;
+    const minTarifa = 0.55; // limite inferior de tarifa no jogo
+    const baseClima = 0.6; // valor inicial
+    const targetClima = 0.7; // requisito para vitória coletiva
+    const baseTerritory = 9.0; // 3x3 inicial
+    final totalCells = (state.size * state.size).toDouble();
+
+    for (final playerId in state.registeredPlayers) {
+      final playerState = _playerState(playerId);
+      final metrics = playerState.metrics;
+      final territory = state.getTerritorySize(playerId);
+
+      final sustentabilidade = ((metrics.acessoEnergia + metrics.limpa) / 2.0).clamp(0, 1).toDouble();
+      final economia = ((playerState.orcamento - econBase) / (econTarget - econBase)).clamp(0, 1).toDouble();
+
+      final relativeEdu = ((metrics.educacao - baseEdu) / (1 - baseEdu)).clamp(0, 1).toDouble();
+      final relativeTarifa = ((baseTarifa - metrics.tarifa) / (baseTarifa - minTarifa)).clamp(0, 1).toDouble();
+      final ciencia = ((relativeEdu + relativeTarifa) / 2.0).clamp(0, 1).toDouble();
+
+      final territorial =
+          ((territory - baseTerritory) / (totalCells - baseTerritory)).clamp(0, 1).toDouble();
+
+      final coletivo = ((state.metrics.clima - baseClima) / (targetClima - baseClima)).clamp(0, 1).toDouble();
+
+      progress[playerId] = {
+        VictoryType.sustentavel: sustentabilidade,
+        VictoryType.economica: economia,
+        VictoryType.cientifica: ciencia,
+        VictoryType.territorial: territorial,
+        VictoryType.coletiva: coletivo,
+      };
+    }
+
+    return progress;
+  }
+
+  /// Retorna o líder em cada tipo de vitória
+  Map<VictoryType, String> getVictoryLeaders() {
+    final progress = calculateVictoryProgress();
+    final leaders = <VictoryType, String>{};
+
+    for (final victoryType in VictoryType.values) {
+      String? leader;
+      double maxProgress = 0.0;
+
+      for (final entry in progress.entries) {
+        final playerId = entry.key;
+        final playerProgress = entry.value[victoryType] ?? 0.0;
+
+        if (playerProgress > maxProgress) {
+          maxProgress = playerProgress;
+          leader = playerId;
+        }
+      }
+
+      if (leader != null) {
+        leaders[victoryType] = leader;
+      }
+    }
+
+    return leaders;
   }
 }
 

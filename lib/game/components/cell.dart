@@ -1,6 +1,6 @@
 import 'package:flame/components.dart';
 import 'package:flame/events.dart';
-import 'package:flutter/painting.dart';
+import 'package:flutter/material.dart';
 
 import '../energy_game.dart';
 import '../state/game_state.dart';
@@ -20,6 +20,17 @@ class Cell extends PositionComponent
   @override
   void render(Canvas canvas) {
     final model = game.state.grid[cx][cy];
+    final visibility = game.getCellVisibility(cx, cy);
+
+    // Se célula não foi explorada, renderizar apenas escuro total
+    if (visibility == VisibilityState.unexplored) {
+      canvas.drawRect(
+        size.toRect(),
+        Paint()..color = const Color(0xFF000000),
+      );
+      return;
+    }
+
     final ownerColor = game.colorForOwner(model.ownerId);
     final isLocalOwner = model.ownerId == game.localPlayerId;
     final backgroundOpacity = model.b == Building.vazio ? 0.26 : 0.55;
@@ -31,6 +42,32 @@ class Cell extends PositionComponent
       size.toRect(),
       Paint()..color = background,
     );
+
+    // Recurso estratégico (se houver)
+    if (model.resource != ResourceType.none) {
+      final resourceColor = _getResourceColor(model.resource);
+      // Brilho de fundo para o recurso
+      canvas.drawRect(
+        size.toRect(),
+        Paint()..color = resourceColor.withValues(alpha: 0.2),
+      );
+
+      // Ícone do recurso no canto superior esquerdo
+      final iconSize = size.x * 0.25;
+      final iconRect = Rect.fromLTWH(3, 3, iconSize, iconSize);
+      canvas.drawCircle(
+        iconRect.center,
+        iconSize / 2,
+        Paint()..color = resourceColor,
+      );
+
+      // Estrela/símbolo no centro do ícone
+      canvas.drawCircle(
+        iconRect.center,
+        iconSize / 4,
+        Paint()..color = Colors.white,
+      );
+    }
 
     // building sprite, if any
     final building = model.b;
@@ -103,37 +140,29 @@ class Cell extends PositionComponent
       }
     }
 
-    // ===== Preview overlays =====
-    if (!game.removeMode) {
-      // Build: outline green/red depending on budget
-      if (model.b == Building.vazio) {
-        final selected = game.selecionado ?? Building.solar;
-        final canAfford =
-            game.localPlayerState.orcamento >= game.costOf(selected);
-        canvas.drawRect(
-          size.toRect().deflate(2),
-          Paint()
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 2.0
-            ..color =
-                canAfford ? const Color(0xFF66BB6A) : const Color(0xFFE57373),
-        );
-      }
-    } else {
-      // Removal: red stroke and translucent fill
-      if (model.b != Building.vazio) {
-        canvas.drawRect(
-          size.toRect().deflate(2),
-          Paint()
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 2.0
-            ..color = const Color(0xFFE53935),
-        );
-        canvas.drawRect(
-          size.toRect(),
-          Paint()..color = const Color(0x80E53935),
-        );
-      }
+    // Fog of War: Overlay para células explored (já vistas mas não atualmente visíveis)
+    if (visibility == VisibilityState.explored) {
+      canvas.drawRect(
+        size.toRect(),
+        Paint()..color = const Color(0x99000000), // 60% preto
+      );
+    }
+  }
+
+  Color _getResourceColor(ResourceType resource) {
+    switch (resource) {
+      case ResourceType.none:
+        return Colors.transparent;
+      case ResourceType.energyBonus:
+        return const Color(0xFFFDD835); // Amarelo brilhante (energia)
+      case ResourceType.treasury:
+        return const Color(0xFFFFB300); // Dourado (dinheiro)
+      case ResourceType.cleanSource:
+        return const Color(0xFF66BB6A); // Verde (sustentabilidade)
+      case ResourceType.research:
+        return const Color(0xFF42A5F5); // Azul (ciência)
+      case ResourceType.fertileLand:
+        return const Color(0xFF8D6E63); // Marrom (terra fértil)
     }
   }
 

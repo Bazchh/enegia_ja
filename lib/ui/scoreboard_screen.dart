@@ -121,6 +121,10 @@ class _PlayerCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final color = Color(int.parse('0xFF${score.color.substring(1)}'));
+    // Avoid RangeError when the player id is shorter than 6 characters
+    final displayId = score.playerId.length > 6
+        ? score.playerId.substring(0, 6)
+        : score.playerId;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -150,7 +154,7 @@ class _PlayerCard extends StatelessWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    'Jogador ${score.playerId.substring(0, 6).toUpperCase()}',
+                    'Jogador ${displayId.toUpperCase()}',
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),

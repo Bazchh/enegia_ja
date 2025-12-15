@@ -3,6 +3,21 @@ import '../world_events.dart';
 
 enum Building { vazio, solar, eolica, eficiencia, saneamento }
 
+enum ResourceType {
+  none,
+  energyBonus,    // +20% produção de energia
+  treasury,       // +5 orçamento por turno
+  cleanSource,    // +15% sustentabilidade
+  research,       // +10% educação/ciência
+  fertileLand,    // -20% custo de construção
+}
+
+enum VisibilityState {
+  unexplored,  // Nunca visto (escuro total)
+  explored,    // Já visto mas não visível atualmente (semi-escuro)
+  visible,     // Visível atualmente (normal)
+}
+
 class Metrics {
   double acessoEnergia = 0; // 0..1
   double limpa = 0; // 0..1 (% da energia que é limpa)
@@ -51,6 +66,7 @@ class CellModel {
   String? ownerId;
   Map<String, double> influence; // Influência de cada jogador nesta célula
   bool justConquered; // Marca células recém-conquistadas para animação
+  ResourceType resource; // Recurso estratégico nesta célula
 
   CellModel({
     this.b = Building.vazio,
@@ -58,6 +74,7 @@ class CellModel {
     this.ownerId,
     Map<String, double>? influence,
     this.justConquered = false,
+    this.resource = ResourceType.none,
   }) : influence = influence ?? {};
 
   factory CellModel.fromJson(Map<String, dynamic> json) => CellModel(
@@ -74,6 +91,12 @@ class CellModel {
                 ),
               )
             : {},
+        resource: json['resource'] != null
+            ? ResourceType.values.firstWhere(
+                (e) => e.name == json['resource'],
+                orElse: () => ResourceType.none,
+              )
+            : ResourceType.none,
       );
 
   Map<String, dynamic> toJson() => {
@@ -81,6 +104,7 @@ class CellModel {
         'powered': powered,
         if (ownerId != null) 'ownerId': ownerId,
         if (influence.isNotEmpty) 'influence': influence,
+        if (resource != ResourceType.none) 'resource': resource.name,
       };
 }
 
@@ -92,7 +116,7 @@ class PlayerState {
   double influenciaSocial; // Eficiência + Saneamento
 
   PlayerState({
-    this.orcamento = 150, // Aumentado de 100 para 150 - Mais margem inicial
+    this.orcamento = 20, // Reduzido para forçar escolhas estratégicas iniciais
     Metrics? metrics,
     PlayerEconomy? economy,
     this.influenciaEnergia = 0.0,
@@ -121,7 +145,7 @@ class PlayerState {
       };
 
   void reset() {
-    orcamento = 150; // Atualizado de 100 para 150
+    orcamento = 20; // Reduzido para forçar escolhas estratégicas iniciais
     metrics.reset();
     economy.reset();
     influenciaEnergia = 0.0;

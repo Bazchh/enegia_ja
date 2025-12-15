@@ -28,9 +28,9 @@ class MultiplayerGame extends EnergyGame {
     this.isHost = false,
     List<String>? initialPlayers,
     Map<String, String>? playerColors,
+    super.gridSize = 40, // Grid grande para exploração
   })  : socket = existingSocket ?? GameSocket(roomId: roomId),
-        _ownsSocket = existingSocket == null,
-        super() {
+        _ownsSocket = existingSocket == null {
     setLocalPlayer(socket.playerId);
     _applyPlayerColors(playerColors);
     _registerSocketCallbacks();
@@ -175,6 +175,7 @@ class MultiplayerGame extends EnergyGame {
     state = remoteState;
     state.ensurePlayer(socket.playerId);
     _refreshColorsFromState();
+    requestCameraRecenter(recenterNow: true);
   }
 
   void _handlePlayerJoined(String playerId, String roomId) {
@@ -351,15 +352,29 @@ class MultiplayerGame extends EnergyGame {
     if (!isHost) return false;
     var changed = false;
 
+    // Verificar quantos jogadores precisam de território
+    var playersNeedingTerritory = <String>[];
     for (var i = 0; i < _playerOrder.length; i++) {
       final playerId = _playerOrder[i];
       _ensureColorForPlayer(playerId, i);
       state.ensurePlayer(playerId);
-      if (playerHasAnyCell(playerId)) {
-        continue;
+      if (!playerHasAnyCell(playerId)) {
+        playersNeedingTerritory.add(playerId);
+        changed = true;
       }
-      changed = true;
-      _assignTerritory(playerId, i);
+    }
+
+    // Se todos os jogadores precisam de território, usar spawn aleatório
+    if (playersNeedingTerritory.length == _playerOrder.length && _playerOrder.length > 1) {
+      initializePlayerSpawns();
+    } else {
+      // Se apenas alguns precisam, usar método antigo (cantos)
+      for (var i = 0; i < _playerOrder.length; i++) {
+        final playerId = _playerOrder[i];
+        if (playersNeedingTerritory.contains(playerId)) {
+          _assignTerritory(playerId, i);
+        }
+      }
     }
 
     return changed;
@@ -376,6 +391,8 @@ class MultiplayerGame extends EnergyGame {
     final center = centers[index % centers.length];
     final cx = center[0].clamp(0, state.size - 1);
     final cy = center[1].clamp(0, state.size - 1);
+
+    recordPlayerSpawn(playerId, cx, cy, centerIfLocal: false);
 
     for (var dx = -1; dx <= 1; dx++) {
       for (var dy = -1; dy <= 1; dy++) {

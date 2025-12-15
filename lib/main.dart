@@ -14,6 +14,10 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Energia Já!',
+      debugShowCheckedModeBanner: false,
+      debugShowMaterialGrid: false,
+      showPerformanceOverlay: false,
+      showSemanticsDebugger: false,
       theme: ThemeData(
         colorScheme: ColorScheme.dark(
           // Cores principais
@@ -134,8 +138,141 @@ class MainMenu extends StatelessWidget {
               },
               child: const Text('Modo Multiplayer'),
             ),
+            const SizedBox(height: 20),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.help_outline, color: Color(0xFFFFB300)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white,
+                side: const BorderSide(color: Color(0xFFFFB300), width: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              ),
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (context) => const _HowToPlayDialog(),
+                );
+              },
+              label: const Text(
+                'Como Jogar',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _HowToPlayDialog extends StatelessWidget {
+  const _HowToPlayDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Dialog(
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 500),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.help, color: Color(0xFFFFB300)),
+                const SizedBox(width: 12),
+                Text(
+                  'Como Jogar',
+                  style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Objetivo: construir energia limpa, equilibrar orçamento e conquistar território antes dos demais.',
+              style: TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 12),
+            const _HowToPlayTip(
+              title: 'Como começar',
+              bullets: [
+                'Use seu território inicial para erguer as primeiras usinas.',
+                'Solar e eólica são baratas e limpam o mapa rapidamente.',
+              ],
+            ),
+            const _HowToPlayTip(
+              title: 'Gerencie o dinheiro',
+              bullets: [
+                'Cada construção custa orçamento. Planeje antes de gastar.',
+                'Edifícios de eficiência e tesouros aumentam sua renda por turno.',
+              ],
+            ),
+            const _HowToPlayTip(
+              title: 'Expanda com cuidado',
+              bullets: [
+                'Construções criam influência e conquistam células vizinhas com o tempo.',
+                'Avançar sobre recursos estratégicos dá bônus fortes (dinheiro, energia limpa, pesquisa).',
+              ],
+            ),
+            const _HowToPlayTip(
+              title: 'Olho nas vitórias',
+              bullets: [
+                'Sustentável: mantenha energia limpa alta.',
+                'Econômica: tenha o maior orçamento.',
+                'Científica: melhore educação e reduza tarifa.',
+                'Territorial: controle mais células.',
+                'Coletiva: o clima global precisa ficar saudável; todos ganham esse selo.',
+              ],
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Entendi!'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HowToPlayTip extends StatelessWidget {
+  const _HowToPlayTip({required this.title, required this.bullets});
+
+  final String title;
+  final List<String> bullets;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 4),
+          ...bullets.map(
+            (b) => Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('• '),
+                Expanded(child: Text(b)),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
